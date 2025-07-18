@@ -167,9 +167,6 @@ void reader::parse_body() {
     if (m_message->has_header<headers::content_type>()) {
         const auto& type = m_message->header<headers::content_type>().type;
         load_body(type, std::move(body));
-
-        m_message->remove_headers<headers::content_length>();
-        m_message->remove_headers<headers::content_type>();
     } else {
         throw missing_content_type();
     }
