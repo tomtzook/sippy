@@ -46,6 +46,8 @@ using _header_holder_ptr = std::unique_ptr<_base_header_holder>;
 struct _base_header_holder {
     virtual ~_base_header_holder() = default;
 
+    [[nodiscard]] virtual const char* name() const = 0;
+    [[nodiscard]] virtual uint32_t flags() const = 0;
     [[nodiscard]] virtual _header_holder_ptr copy() const = 0;
     virtual std::istream& operator>>(std::istream& is) = 0;
     virtual std::ostream& operator<<(std::ostream& os) = 0;
@@ -53,6 +55,12 @@ struct _base_header_holder {
 
 template<meta::_header_type T>
 struct _header_holder final : _base_header_holder {
+    [[nodiscard]] const char* name() const override {
+        return meta::_header_detail<T>::name();
+    }
+    [[nodiscard]] uint32_t flags() const override {
+        return meta::_header_detail<T>::flags();
+    }
     [[nodiscard]] _header_holder_ptr copy() const override {
         auto cpy = std::make_unique<_header_holder>();
         cpy->value = value;

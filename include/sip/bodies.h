@@ -30,6 +30,7 @@ using _body_holder_ptr = std::unique_ptr<_base_body_holder>;
 struct _base_body_holder {
     virtual ~_base_body_holder() = default;
 
+    [[nodiscard]] virtual const char* type() const = 0;
     [[nodiscard]] virtual bool is_of_type(const std::string& type) const = 0;
     virtual std::istream& operator>>(std::istream& is) = 0;
     virtual std::ostream& operator<<(std::ostream& os) = 0;
@@ -37,6 +38,9 @@ struct _base_body_holder {
 
 template<meta::_body_type T>
 struct _body_holder final : _base_body_holder {
+    [[nodiscard]] const char* type() const override {
+        return meta::_body_detail<T>::app_type();
+    }
     [[nodiscard]] bool is_of_type(const std::string& type) const override {
         return type == meta::_body_detail<T>::app_type();
     }

@@ -15,15 +15,17 @@ add_library(sippy STATIC
         src/serialization/reader.h
         src/serialization/matchers.h
         src/sip/types_storage.h
-        src/sip/parser.h
+        src/sip/reader.h
+        src/sip/writer.h
 
         src/serialization/reader.cpp
         src/sip/types.cpp
-        src/sip/parser.cpp
         src/sip/message.cpp
         src/sip/headers_read_write.cpp
         src/sip/bodies_read_write.cpp
-        src/sip/types_storage.cpp)
+        src/sip/types_storage.cpp
+        src/sip/reader.cpp
+        src/sip/writer.cpp)
 target_link_libraries(sippy looper)
 target_include_directories(sippy
         PUBLIC

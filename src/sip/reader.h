@@ -22,13 +22,13 @@ private:
     serialization::reader m_reader;
 };
 
-class parser {
+class reader {
 public:
-    explicit parser(std::istream& is);
+    explicit reader(std::istream& is);
 
     void reset();
     message& get();
-    std::unique_ptr<message> release();
+    message_ptr release();
 
     void parse_headers();
     bool can_parse_body();
@@ -44,7 +44,7 @@ private:
     void load_body(const std::string& type, std::string&& value);
 
     std::istream& m_is;
-    std::unique_ptr<message> m_message;
+    message_ptr m_message;
 
 };
 

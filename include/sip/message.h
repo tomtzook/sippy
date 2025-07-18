@@ -32,6 +32,11 @@ std::ostream& operator<<(std::ostream& os, const request_line& line);
 std::istream& operator>>(std::istream& is, status_line& line);
 std::ostream& operator<<(std::ostream& os, const status_line& line);
 
+class reader;
+class writer;
+class message;
+using message_ptr = std::unique_ptr<message>;
+
 class message {
 public:
     message() = default;
@@ -87,6 +92,7 @@ public:
     void set_body(T&& body);
     void remove_body();
 
+private:
     [[nodiscard]] size_t _header_count(const std::string& name) const;
     [[nodiscard]] const headers::storage::_base_header_holder* _get_header(const std::string& name, size_t index) const;
     headers::storage::_base_header_holder* _get_header(const std::string& name, size_t index);
@@ -100,11 +106,13 @@ public:
     [[nodiscard]] bodies::storage::_base_body_holder* _get_body(const std::string& type);
     void _set_body(bodies::storage::_body_holder_ptr body);
 
-private:
     std::optional<sip::request_line> m_request_line;
     std::optional<sip::status_line> m_status_line;
     std::map<std::string, std::vector<headers::storage::_header_holder_ptr>> m_headers;
     bodies::storage::_body_holder_ptr m_body;
+
+    friend class reader;
+    friend class writer;
 };
 
 template<headers::meta::_header_type T>

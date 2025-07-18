@@ -5,7 +5,7 @@
 
 #include "serialization/matchers.h"
 #include "types_storage.h"
-#include "parser.h"
+#include "reader.h"
 
 namespace sippy::sip {
 
@@ -114,29 +114,29 @@ void header_reader::eat_new_line() {
     m_reader.eat('\n');
 }
 
-parser::parser(std::istream& is)
+reader::reader(std::istream& is)
     : m_is(is)
     , m_message()
 {}
 
-void parser::reset() {
+void reader::reset() {
     m_message = std::make_unique<message>();
 }
 
-message& parser::get() {
+message& reader::get() {
     return *m_message;
 }
 
-std::unique_ptr<message> parser::release() {
+message_ptr reader::release() {
     return std::move(m_message);
 }
 
-void parser::parse_headers() {
+void reader::parse_headers() {
     parse_start_line();
     while (parse_next_header());
 }
 
-bool parser::can_parse_body() {
+bool reader::can_parse_body() {
     const auto len = get_body_length();
     if (len < 1) {
         return true;
@@ -154,7 +154,7 @@ bool parser::can_parse_body() {
     return true;
 }
 
-void parser::parse_body() {
+void reader::parse_body() {
     serialization::reader reader(m_is);
     reader.eat("\r\n");
 
@@ -167,12 +167,15 @@ void parser::parse_body() {
     if (m_message->has_header<headers::content_type>()) {
         const auto& type = m_message->header<headers::content_type>().type;
         load_body(type, std::move(body));
+
+        m_message->remove_headers<headers::content_length>();
+        m_message->remove_headers<headers::content_type>();
     } else {
         throw missing_content_type();
     }
 }
 
-void parser::parse_start_line() {
+void reader::parse_start_line() {
     header_reader reader(m_is);
     const auto lineOpt = reader.read_start_line();
     if (!lineOpt.has_value()) {
@@ -206,7 +209,7 @@ void parser::parse_start_line() {
     }
 }
 
-bool parser::parse_next_header() {
+bool reader::parse_next_header() {
     header_reader header_reader(m_is);
     auto nameOpt = header_reader.read_header_name();
     if (!nameOpt.has_value()) {
@@ -226,7 +229,7 @@ bool parser::parse_next_header() {
     return true;
 }
 
-void parser::load_header_values(const std::string& name, std::string&& value) {
+void reader::load_header_values(const std::string& name, std::string&& value) {
     const auto defOpt = headers::storage::get_header(name);
     if (!defOpt.has_value()) {
         // unknown header, ignore it
@@ -261,7 +264,7 @@ void parser::load_header_values(const std::string& name, std::string&& value) {
     } while (!ss.eof());
 }
 
-uint32_t parser::get_body_length() const {
+uint32_t reader::get_body_length() const {
     if (!m_message->has_header<headers::content_length>()) {
         // no body then
         return 0;
@@ -270,7 +273,7 @@ uint32_t parser::get_body_length() const {
     return m_message->header<headers::content_length>().length;
 }
 
-void parser::load_body(const std::string& type, std::string&& value) {
+void reader::load_body(const std::string& type, std::string&& value) {
     const auto defOpt = bodies::storage::get_body(type);
     if (!defOpt.has_value()) {
         throw unknown_body();
