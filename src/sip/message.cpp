@@ -21,6 +21,20 @@ public:
     }
 };
 
+class no_body final : public std::exception {
+public:
+    [[nodiscard]] const char *what() const noexcept override {
+        return "no body";
+    }
+};
+
+class wrong_body_type final : public std::exception {
+public:
+    [[nodiscard]] const char *what() const noexcept override {
+        return "wrong body type";
+    }
+};
+
 request_line::request_line()
     : method(sip::method::invite)
     , uri()
@@ -101,6 +115,10 @@ bool message::is_response() const {
     return m_status_line.has_value();
 }
 
+bool message::has_body() const {
+    return m_body.get() != nullptr;
+}
+
 const sip::request_line& message::request_line() const {
     if (m_request_line.has_value()) {
         return m_request_line.value();
@@ -162,6 +180,10 @@ size_t message::_header_count(const std::string& name) const {
     return 0;
 }
 
+void message::remove_body() {
+    m_body.reset();
+}
+
 const headers::storage::_base_header_holder* message::_get_header(const std::string& name, size_t index) const {
     const auto it = m_headers.find(name);
     if (it == m_headers.end()) {
@@ -210,6 +232,69 @@ void message::_copy_headers(const std::string& name, const message& other) {
             _add_header(name, holder->copy());
         }
     }
+}
+
+bool message::_remove_header(const std::string& name, const size_t index) {
+    const auto it = m_headers.find(name);
+    if (it == m_headers.end()) {
+        return false;
+    }
+    if (it->second.empty()) {
+        return false;
+    }
+    if (index >= it->second.size()) {
+        return false;
+    }
+
+    it->second.erase(it->second.begin() + static_cast<ptrdiff_t>(index));
+    return true;
+}
+
+bool message::_remove_headers(const std::string& name) {
+    const auto it = m_headers.find(name);
+    if (it == m_headers.end()) {
+        return false;
+    }
+    if (it->second.empty()) {
+        return false;
+    }
+
+    it->second.clear();
+    return true;
+}
+
+bool message::_is_body(const std::string& type) const {
+    if (!has_body()) {
+        return false;
+    }
+
+    return m_body->is_of_type(type);
+}
+
+const bodies::storage::_base_body_holder* message::_get_body(const std::string& type) const {
+    if (!has_body()) {
+        throw no_body();
+    }
+    if (!m_body->is_of_type(type)) {
+        throw wrong_body_type();
+    }
+
+    return m_body.get();
+}
+
+bodies::storage::_base_body_holder* message::_get_body(const std::string& type) {
+    if (!has_body()) {
+        throw no_body();
+    }
+    if (!m_body->is_of_type(type)) {
+        throw wrong_body_type();
+    }
+
+    return m_body.get();
+}
+
+void message::_set_body(bodies::storage::_body_holder_ptr body) {
+    m_body = std::move(body);
 }
 
 }

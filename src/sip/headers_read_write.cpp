@@ -1,16 +1,21 @@
-#pragma once
-
 #include <sip/headers.h>
 
 #include "serialization/matchers.h"
 #include "serialization/reader.h"
 
 
+using namespace sippy;
+
 static constexpr bool is_end_of_uri(const char c) {
     return c == '>';
 }
 
-DEFINE_SIP_HEADER_READ(from) {
+static constexpr bool is_data_val(const char c) {
+    return serialization::is_alphanumeric(c) || c == '/';
+}
+
+template<typename T>
+static inline void read_from_to(std::istream& is, T& h) {
     serialization::reader reader(is);
 
     if (!reader.peek('<')) {
@@ -21,14 +26,18 @@ DEFINE_SIP_HEADER_READ(from) {
     reader.eat('<');
     h.uri = reader.read_until(is_end_of_uri);
     reader.eat('>');
+    reader.eat_while(serialization::is_whitespace);
 
     if (reader.peek(';')) {
         reader.eat(';');
+        reader.eat_while(serialization::is_whitespace);
+        reader.eat("tag=");
         h.tag = reader.read_while(serialization::is_alphanumeric);
     }
 }
 
-DEFINE_SIP_HEADER_WRITE(from) {
+template<typename T>
+static inline void write_from_to(std::ostream& os, const T& h) {
     if (h.display_name) {
         os << h.display_name.value();
         os << ' ';
@@ -37,8 +46,24 @@ DEFINE_SIP_HEADER_WRITE(from) {
     os << '<' << h.uri << '>';
 
     if (h.tag) {
-        os << ';' << h.tag.value();
+        os << ";tag=" << h.tag.value();
     }
+}
+
+DEFINE_SIP_HEADER_READ(from) {
+    read_from_to(is, h);
+}
+
+DEFINE_SIP_HEADER_WRITE(from) {
+    write_from_to(os, h);
+}
+
+DEFINE_SIP_HEADER_READ(to) {
+    read_from_to(is, h);
+}
+
+DEFINE_SIP_HEADER_WRITE(to) {
+    write_from_to(os, h);
 }
 
 DEFINE_SIP_HEADER_READ(cseq) {
@@ -53,4 +78,21 @@ DEFINE_SIP_HEADER_WRITE(cseq) {
     os << h.seq_num;
     os << ' ';
     os << h.method;
+}
+
+DEFINE_SIP_HEADER_READ(content_length) {
+    is >> h.length;
+}
+
+DEFINE_SIP_HEADER_WRITE(content_length) {
+    os << h.length;
+}
+
+DEFINE_SIP_HEADER_READ(content_type) {
+    serialization::reader reader(is);
+    h.type = reader.read_while(is_data_val);
+}
+
+DEFINE_SIP_HEADER_WRITE(content_type) {
+    os << h.type;
 }

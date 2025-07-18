@@ -29,6 +29,13 @@ public:
     }
 };
 
+class not_enough_characters final : public std::exception {
+public:
+    [[nodiscard]] const char *what() const noexcept override {
+        return "not enough characters";
+    }
+};
+
 using character = int16_t;
 static constexpr character eof = -1;
 static constexpr character uneaten = -2;

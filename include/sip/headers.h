@@ -1,7 +1,6 @@
 #pragma once
 
 #include <exception>
-#include <iostream>
 #include <optional>
 #include <memory>
 
@@ -74,14 +73,14 @@ struct _header_holder final : _base_header_holder {
 struct _base_header_def {
     virtual ~_base_header_def() = default;
 
-    [[nodiscard]] virtual const std::string& name() const = 0;
+    [[nodiscard]] virtual const char* name() const = 0;
     [[nodiscard]] virtual uint32_t flags() const = 0;
     [[nodiscard]] virtual _header_holder_ptr create() const = 0;
 };
 
 template<meta::_header_type T>
 struct _header_def final : _base_header_def {
-    [[nodiscard]] const std::string& name() const override {
+    [[nodiscard]] const char* name() const override {
         return meta::_header_detail<T>::name();
     }
     [[nodiscard]] uint32_t flags() const override {
@@ -92,6 +91,15 @@ struct _header_def final : _base_header_def {
     }
 };
 
+void _register_header_internal(const std::string& name, std::shared_ptr<_base_header_def> ptr);
+
+}
+
+template<meta::_header_type T>
+void register_header() {
+    const auto& name = meta::_header_detail<T>::name();
+    auto def = std::make_shared<storage::_header_def<T>>();
+    storage::_register_header_internal(name, std::move(def));
 }
 
 }
@@ -103,8 +111,8 @@ struct _header_def final : _base_header_def {
         std::ostream& operator<<(std::ostream& os, h_name & h); \
         namespace meta { \
             template<> struct _header_detail<sippy::sip::headers::h_name> { \
-                static constexpr auto name() { return (str_name) ; } \
-                static constexpr auto flags() { return (flags_int) ; } \
+                static constexpr const char* name() { return (str_name) ; } \
+                static constexpr uint32_t flags() { return (flags_int) ; } \
             }; \
             template<> struct _header_reader<sippy::sip::headers::h_name> { \
                 static void read(std::istream& is, sippy::sip::headers::h_name & h) { is >> h; } \
@@ -152,4 +160,12 @@ DECLARE_SIP_HEADER(to, "To", flag_priority_normal) {
 DECLARE_SIP_HEADER(cseq, "CSeq", flag_priority_normal) {
     uint32_t seq_num;
     sip::method method;
+};
+
+DECLARE_SIP_HEADER(content_length, "Content-Length", flag_priority_top) {
+    uint32_t length;
+};
+
+DECLARE_SIP_HEADER(content_type, "Content-Type", flag_priority_top) {
+    std::string type;
 };

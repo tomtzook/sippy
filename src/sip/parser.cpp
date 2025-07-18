@@ -4,7 +4,7 @@
 #include <sip/message.h>
 
 #include "serialization/matchers.h"
-#include "header_storage.h"
+#include "types_storage.h"
 #include "parser.h"
 
 namespace sippy::sip {
@@ -30,6 +30,27 @@ public:
     }
 };
 
+class body_trailing_data final : public std::exception {
+public:
+    [[nodiscard]] const char *what() const noexcept override {
+        return "trailing data in body";
+    }
+};
+
+class missing_content_type final : public std::exception {
+public:
+    [[nodiscard]] const char *what() const noexcept override {
+        return "missing content type";
+    }
+};
+
+class unknown_body final : public std::exception {
+public:
+    [[nodiscard]] const char *what() const noexcept override {
+        return "unknown body";
+    }
+};
+
 static void fixup_header_name(std::string& name) {
     bool word_start = true;
     for (char& ch : name) {
@@ -42,11 +63,6 @@ static void fixup_header_name(std::string& name) {
             word_start = true;
         }
     }
-}
-
-static void trim(std::istream& is) {
-    serialization::reader reader(is);
-    reader.eat_while(serialization::is_whitespace);
 }
 
 header_reader::header_reader(std::istream& is)
@@ -64,18 +80,19 @@ std::optional<std::string> header_reader::read_header_name() {
     m_reader.eat_while(serialization::is_whitespace);
 
     auto data = m_reader.read_while(serialization::is_letter_or_dash);
-    m_reader.eat_while(serialization::is_whitespace);
     if (data.empty()) {
         // empty line, so next is the body
         return std::nullopt;
     }
 
+    m_reader.eat_while(serialization::is_whitespace);
     m_reader.eat(':');
 
     return {std::move(data)};
 }
 
 std::optional<std::string> header_reader::read_header_value() {
+    m_reader.eat_while(serialization::is_whitespace_or_tab);
     auto data = m_reader.read_until(serialization::is_new_line);
     eat_new_line();
 
@@ -99,7 +116,61 @@ void header_reader::eat_new_line() {
 
 parser::parser(std::istream& is)
     : m_is(is)
+    , m_message()
 {}
+
+void parser::reset() {
+    m_message = std::make_unique<message>();
+}
+
+message& parser::get() {
+    return *m_message;
+}
+
+std::unique_ptr<message> parser::release() {
+    return std::move(m_message);
+}
+
+void parser::parse_headers() {
+    parse_start_line();
+    while (parse_next_header());
+}
+
+bool parser::can_parse_body() {
+    const auto len = get_body_length();
+    if (len < 1) {
+        return true;
+    }
+
+    const auto current_pos = m_is.tellg();
+    m_is.seekg(0, std::ios::end);
+    const auto end = m_is.tellg();
+    m_is.seekg(current_pos, std::ios::beg);
+
+    if ((end - current_pos) < len) {
+        return false;
+    }
+
+    return true;
+}
+
+void parser::parse_body() {
+    serialization::reader reader(m_is);
+    reader.eat("\r\n");
+
+    const auto len = get_body_length();
+    if (len < 1) {
+        return;
+    }
+
+    auto body = reader.read(len);
+    if (m_message->has_header<headers::content_type>()) {
+        const auto& type = m_message->header<headers::content_type>().type;
+        load_body(type, std::move(body));
+    } else {
+        throw missing_content_type();
+    }
+}
 
 void parser::parse_start_line() {
     header_reader reader(m_is);
@@ -121,23 +192,25 @@ void parser::parse_start_line() {
         std::stringstream ss(str);
 
         sip::request_line request_line;
-        ss >> request_line; // todo: return/store value
+        ss >> request_line;
+        m_message->set_request_line(std::move(request_line));
     } else if (match[4].matched && match[5].matched && match[6].matched) {
         // status
         std::stringstream ss(str);
 
         sip::status_line status_line;
-        ss >> status_line; // todo: return/store value
+        ss >> status_line;
+        m_message->set_status_line(std::move(status_line));
     } else {
         throw bad_start_line();
     }
 }
 
-void parser::parse_next_header() {
+bool parser::parse_next_header() {
     header_reader header_reader(m_is);
     auto nameOpt = header_reader.read_header_name();
     if (!nameOpt.has_value()) {
-        return;
+        return false;
     }
     auto& name = nameOpt.value();
 
@@ -149,10 +222,8 @@ void parser::parse_next_header() {
 
     fixup_header_name(name);
     load_header_values(name, std::move(value));
-}
 
-void parser::parse_body() {
-
+    return true;
 }
 
 void parser::load_header_values(const std::string& name, std::string&& value) {
@@ -168,9 +239,11 @@ void parser::load_header_values(const std::string& name, std::string&& value) {
     std::stringstream ss(std::move(value));
     serialization::reader reader(ss);
     do {
+        reader.eat_while(serialization::is_whitespace);
+
         auto holder = def->create();
         holder->operator>>(ss);
-        // todo: save header
+        m_message->_add_header(name, std::move(holder));
 
         reader.eat_while(serialization::is_whitespace);
 
@@ -186,6 +259,35 @@ void parser::load_header_values(const std::string& name, std::string&& value) {
             // next loop run will parse the header
         }
     } while (!ss.eof());
+}
+
+uint32_t parser::get_body_length() const {
+    if (!m_message->has_header<headers::content_length>()) {
+        // no body then
+        return 0;
+    }
+
+    return m_message->header<headers::content_length>().length;
+}
+
+void parser::load_body(const std::string& type, std::string&& value) {
+    const auto defOpt = bodies::storage::get_body(type);
+    if (!defOpt.has_value()) {
+        throw unknown_body();
+    }
+
+    const auto& def = defOpt.value();
+
+    std::stringstream ss(std::move(value));
+
+    auto holder = def->create();
+    holder->operator>>(ss);
+
+    if (!ss.eof()) {
+        throw body_trailing_data();
+    }
+
+    m_message->_set_body(std::move(holder));
 }
 
 }

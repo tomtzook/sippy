@@ -46,7 +46,14 @@ std::string reader::read(const size_t length) {
     std::string str;
     str.reserve(length);
 
-    m_is.read(str.data(), static_cast<std::streamsize>(length));
+    for (int i = 0; i < length; ++i) {
+        char ch;
+        if (!m_is.get(ch)) {
+            throw not_enough_characters();
+        }
+
+        str.push_back(ch);
+    }
 
     return str;
 }
