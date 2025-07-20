@@ -1,6 +1,7 @@
 #pragma once
 
 #include <optional>
+#include <deque>
 
 #include <sip/message.h>
 
@@ -22,30 +23,95 @@ private:
     serialization::reader m_reader;
 };
 
-class reader {
+class lexer {
 public:
-    explicit reader(std::istream& is);
+    enum class token_type {
+        eof,
+        whitespace,
+        tab,
+        colon,
+        coma,
+        new_line,
+        string,
+        version,
+        method
+    };
 
-    void reset();
-    message& get();
-    message_ptr release();
+    struct token {
+        token_type type = token_type::eof;
+        union {
+            sip::version version;
+            sip::method method;
+        } v;
+        std::string_view str;
+    };
 
-    void parse_headers();
-    bool can_parse_body();
-    void parse_body();
+    explicit lexer(std::istream& is);
+
+    template<typename T>
+    T next() = delete;
+    template<>
+    version next();
+    template<>
+    method next();
+
+    token next();
+    token next(token_type expected_type, bool eat_whitespaces = false);
 
 private:
-    void parse_start_line();
-    bool parse_next_header();
+    std::optional<version> try_read_version(const serialization::tokenizer::token& c_token);
 
-    void load_header_values(const std::string& name, std::string&& value);
+    const serialization::tokenizer::token& next_token();
+    void go_back(size_t count);
 
-    [[nodiscard]] uint32_t get_body_length() const;
-    void load_body(const std::string& type, std::string&& value);
+    serialization::tokenizer m_tokenizer;
+    std::vector<serialization::tokenizer::token> m_read_tokens;
+    size_t m_token_index;
+};
 
-    std::istream& m_is;
-    message_ptr m_message;
+class header_line_parser {
+public:
+    explicit header_line_parser(lexer& lexer);
+private:
+    void parse();
 
+    enum class state {
+        start,
+        name_value,
+        name_end,
+        value_start
+    };
+
+    lexer& m_lexer;
+    state m_state;
+};
+
+class parser {
+public:
+    explicit parser(std::istream& is);
+
+private:
+    enum class state {
+        start_line_start,
+        request_line_uri,
+        request_line_version,
+        response_line_code,
+        response_line_phrase,
+        header_name_start,
+        header_name_end,
+        header_value
+    };
+
+    void parse_next();
+    void parse_header_line();
+    std::vector<lexer::token> next_header_value_tokens();
+
+    void load();
+    [[nodiscard]] lexer::token_type peek_next() const;
+    lexer::token next();
+
+    lexer m_lexer;
+    std::deque<lexer::token> m_tokens;
 };
 
 }

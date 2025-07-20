@@ -53,4 +53,8 @@ static constexpr bool is_alphanumeric(const char c) {
     return is_letter(c) || is_number(c);
 }
 
+static constexpr bool is_textual_sequence(const char c) {
+    return is_letter(c) || is_number(c) || c == '.' || c == '-' || c == '_';
+}
+
 }

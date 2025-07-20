@@ -1,8 +1,12 @@
 
+#include "reader.h"
+
 #include <regex>
+#include <string.h>
 
 #include <sip/message.h>
 
+#include "util/meta.h"
 #include "serialization/matchers.h"
 #include "types_storage.h"
 #include "reader.h"
@@ -48,6 +52,13 @@ class unknown_body final : public std::exception {
 public:
     [[nodiscard]] const char *what() const noexcept override {
         return "unknown body";
+    }
+};
+
+class unexpected_token final : public std::exception {
+public:
+    [[nodiscard]] const char* what() const noexcept override {
+        return "unexpected token";
     }
 };
 
@@ -114,180 +125,275 @@ void header_reader::eat_new_line() {
     m_reader.eat('\n');
 }
 
-reader::reader(std::istream& is)
-    : m_is(is)
-    , m_message()
+static void verify_token_type(const lexer::token& token, const lexer::token_type type) {
+    if (token.type != type) {
+        throw unexpected_token();
+    }
+}
+
+lexer::lexer(std::istream& is)
+    : m_tokenizer(is)
+    , m_read_tokens()
+    , m_token_index(0)
 {}
 
-void reader::reset() {
-    m_message = std::make_unique<message>();
+template<>
+version lexer::next<version>() {
+    return next(token_type::version).v.version;
 }
 
-message& reader::get() {
-    return *m_message;
+template<>
+method lexer::next<method>() {
+    return next(token_type::method).v.method;
 }
 
-message_ptr reader::release() {
-    return std::move(m_message);
-}
+lexer::token lexer::next() {
+    const auto& c_token = next_token();
 
-void reader::parse_headers() {
-    parse_start_line();
-    while (parse_next_header());
-}
-
-bool reader::can_parse_body() {
-    const auto len = get_body_length();
-    if (len < 1) {
-        return true;
-    }
-
-    const auto current_pos = m_is.tellg();
-    m_is.seekg(0, std::ios::end);
-    const auto end = m_is.tellg();
-    m_is.seekg(current_pos, std::ios::beg);
-
-    if ((end - current_pos) < len) {
-        return false;
-    }
-
-    return true;
-}
-
-void reader::parse_body() {
-    serialization::reader reader(m_is);
-    reader.eat("\r\n");
-
-    const auto len = get_body_length();
-    if (len < 1) {
-        return;
-    }
-
-    auto body = reader.read(len);
-    if (m_message->has_header<headers::content_type>()) {
-        const auto& type = m_message->header<headers::content_type>().type;
-        load_body(type, std::move(body));
-    } else {
-        throw missing_content_type();
-    }
-}
-
-void reader::parse_start_line() {
-    header_reader reader(m_is);
-    const auto lineOpt = reader.read_start_line();
-    if (!lineOpt.has_value()) {
-        throw bad_start_line();
-    }
-
-    const auto& str = lineOpt.value();
-
-    const std::regex pattern(R"(^(?:(?:(\w+)\s(.+)\sSIP\/(2\.0))|(?:SIP\/(2\.0)\s(\d+)\s(.+)))$)");
-    std::smatch match;
-    if (!std::regex_match(str, match, pattern)) {
-        throw bad_start_line();
-    }
-
-    if (match[1].matched && match[2].matched && match[3].matched) {
-        // request
-        std::stringstream ss(str);
-
-        sip::request_line request_line;
-        ss >> request_line;
-        m_message->set_request_line(std::move(request_line));
-    } else if (match[4].matched && match[5].matched && match[6].matched) {
-        // status
-        std::stringstream ss(str);
-
-        sip::status_line status_line;
-        ss >> status_line;
-        m_message->set_status_line(std::move(status_line));
-    } else {
-        throw bad_start_line();
-    }
-}
-
-bool reader::parse_next_header() {
-    header_reader header_reader(m_is);
-    auto nameOpt = header_reader.read_header_name();
-    if (!nameOpt.has_value()) {
-        return false;
-    }
-    auto& name = nameOpt.value();
-
-    auto valueOpt = header_reader.read_header_value();
-    if (!valueOpt.has_value()) {
-        throw missing_header_value();
-    }
-    auto& value = valueOpt.value();
-
-    fixup_header_name(name);
-    load_header_values(name, std::move(value));
-
-    return true;
-}
-
-void reader::load_header_values(const std::string& name, std::string&& value) {
-    const auto defOpt = headers::storage::get_header(name);
-    if (!defOpt.has_value()) {
-        // unknown header, ignore it
-        return;
-    }
-
-    const auto& def = defOpt.value();
-    const auto can_multiple = (def->flags() & headers::flag_allow_multiple) != 0;
-
-    std::stringstream ss(std::move(value));
-    serialization::reader reader(ss);
-    do {
-        reader.eat_while(serialization::is_whitespace);
-
-        auto holder = def->create();
-        holder->operator>>(ss);
-        m_message->_add_header(name, std::move(holder));
-
-        reader.eat_while(serialization::is_whitespace);
-
-        if (!ss.eof()) {
-            if (!can_multiple || !reader.peek(',')) {
-                throw header_value_trailing_data();
+    token token{};
+    switch (c_token.type) {
+        case serialization::tokenizer::token_type::eof:
+            token.type = token_type::eof;
+            break;
+        case serialization::tokenizer::token_type::whitespace:
+            token.type = token_type::whitespace;
+            break;
+        case serialization::tokenizer::token_type::tab:
+            token.type = token_type::tab;
+            break;
+        case serialization::tokenizer::token_type::crlf:
+            token.type = token_type::new_line;
+            break;
+        case serialization::tokenizer::token_type::colon:
+            token.type = token_type::colon;
+            break;
+        case serialization::tokenizer::token_type::coma:
+            token.type = token_type::coma;
+            break;
+        case serialization::tokenizer::token_type::string: {
+            const auto ver_opt = try_read_version(c_token);
+            if (ver_opt) {
+                token.type = token_type::version;
+                token.v.version = ver_opt.value();
+                break;
             }
 
-            // more header values
-            reader.eat(',');
-            reader.eat_while(serialization::is_whitespace);
+            const auto method_opt = try_get_method(c_token.str);
+            if (method_opt) {
+                token.type = token_type::method;
+                token.v.method = method_opt.value();
+                break;
+            }
 
-            // next loop run will parse the header
+            token.type = token_type::string;
+            token.str = c_token.str;
+            break;
         }
-    } while (!ss.eof());
+        default:
+            throw unexpected_token();
+    }
+
+    return token;
 }
 
-uint32_t reader::get_body_length() const {
-    if (!m_message->has_header<headers::content_length>()) {
-        // no body then
-        return 0;
-    }
+lexer::token lexer::next(const token_type expected_type, const bool eat_whitespaces) {
+    token token;
+    do {
+        token = next();
+    } while (eat_whitespaces && token.type == token_type::whitespace);
 
-    return m_message->header<headers::content_length>().length;
+    verify_token_type(token, expected_type);
+    return std::move(token);
 }
 
-void reader::load_body(const std::string& type, std::string&& value) {
-    const auto defOpt = bodies::storage::get_body(type);
-    if (!defOpt.has_value()) {
-        throw unknown_body();
+std::optional<version> lexer::try_read_version(const serialization::tokenizer::token& c_token) {
+    if (c_token.type != serialization::tokenizer::token_type::string || strcasecmp(c_token.str.c_str(), "SIP") != 0) {
+        return std::nullopt;
     }
 
-    const auto& def = defOpt.value();
-
-    std::stringstream ss(std::move(value));
-
-    auto holder = def->create();
-    holder->operator>>(ss);
-
-    if (!ss.eof()) {
-        throw body_trailing_data();
+    {
+        const auto& token = next_token();
+        if (token.type != serialization::tokenizer::token_type::forward_slash) {
+            go_back(1);
+            return std::nullopt;
+        }
     }
 
-    m_message->_set_body(std::move(holder));
+    {
+        const auto& token = next_token();
+        if (token.type != serialization::tokenizer::token_type::string) {
+            go_back(2);
+            return std::nullopt;
+        }
+
+        const auto version_opt = try_get_version(token.str);
+        if (version_opt) {
+            return version_opt.value();
+        } else {
+            go_back(2);
+            return std::nullopt;
+        }
+    }
+}
+
+const serialization::tokenizer::token& lexer::next_token() {
+    m_token_index++;
+    if (m_token_index >= m_read_tokens.size()) {
+        auto token = m_tokenizer.next();
+        m_read_tokens.push_back(std::move(token));
+    }
+
+    return m_read_tokens[m_token_index-1];
+}
+
+void lexer::go_back(const size_t count) {
+    if (count > m_token_index) {
+        throw std::runtime_error("not enough history to go back requested amount");
+    }
+
+    m_token_index -= count;
+}
+
+void header_line_parser::parse() {
+    switch (m_state) {
+        case state::start:
+            m_state = state::name_value;
+            break;
+        case state::name_value: {
+            const auto token = m_lexer.next();
+            if (token.type != lexer::token_type::whitespace) {
+                verify_token_type(token, lexer::token_type::string);
+                m_state = state::name_end;
+            }
+            break;
+        }
+    }
+}
+
+parser::parser(std::istream& is)
+    : m_lexer(is)
+    , m_state(state::start_line_start)
+{}
+
+void parser::parse_next() {
+    const auto token = m_lexer.next();
+
+    switch (m_state) {
+        case state::start_line_start:
+            if (token.type == lexer::token_type::method) {
+                m_state_data.request_line.method = token.v.method;
+                m_state = state::request_line_uri;
+            } else if (token.type == lexer::token_type::version) {
+                m_state_data.response_line.version = token.v.version;
+                m_state = state::response_line_code;
+            } else {
+                throw unexpected_token();
+            }
+            break;
+        case state::request_line_uri:
+            verify_token_type(token, lexer::token_type::uri);
+            break;
+        case state::request_line_version:
+            verify_token_type(token, lexer::token_type::version);
+            m_state_data.response_line.version = token.v.version;
+
+            break;
+        case state::header_name_start:
+            verify_token_type(token, lexer::token_type::string);
+            m_state_data.header_name = token.str;
+            m_state = state::header_name_end;
+            break;
+        case state::header_name_end:
+            verify_token_type(token, lexer::token_type::colon);
+            m_state = state::header_value;
+            break;
+    }
+
+}
+
+void parser::parse_header_line() {
+    // name reading
+    const auto name = m_lexer.next(lexer::token_type::string).str;
+    m_lexer.next(lexer::token_type::colon, true);
+
+    // value loading
+    bool first = true;
+    std::vector<lexer::token> value_tokens;
+    do {
+        value_tokens = next_header_value_tokens();
+
+        const auto defOpt = headers::storage::get_header(name);
+        if (!defOpt.has_value()) {
+            // unknown header, ignore it
+            return;
+        }
+
+        const auto& def = defOpt.value();
+        const auto can_multiple = (def->flags() & headers::flag_allow_multiple) != 0;
+        if (!first && !can_multiple) {
+            throw header_value_trailing_data();
+        }
+
+        if (first) {
+            first = false;
+        }
+    } while (!value_tokens.empty());
+}
+
+std::vector<lexer::token> parser::next_header_value_tokens() {
+    std::vector<lexer::token> tokens;
+    bool first = true;
+    bool done = false;
+    do {
+        auto token = next();
+        // ignore initial whitespaces
+        if (first) {
+            if (token.type == lexer::token_type::whitespace) {
+                continue;
+            }
+
+            first = false;
+        }
+
+        if (token.type == lexer::token_type::new_line) {
+            if (util::is_any_of(peek_next(), lexer::token_type::whitespace, lexer::token_type::tab)) {
+                // more data to read in next line
+                next(); // get rid of first sp or only tab
+                first = true;
+                done = false;
+            } else {
+                done = true;
+            }
+        } else if (token.type == lexer::token_type::coma) {
+            done = true;
+        } else {
+            tokens.push_back(std::move(token));
+        }
+    } while (done);
+
+    return tokens;
+}
+
+void parser::load() {
+    lexer::token token;
+    do {
+        token = m_lexer.next();
+        m_tokens.push_back(token);
+    } while (token.type != lexer::token_type::eof);
+}
+
+lexer::token_type parser::peek_next() const {
+    if (m_tokens.empty()) {
+        return lexer::token_type::eof;
+    }
+
+    return m_tokens.front().type;
+}
+
+lexer::token parser::next() {
+    auto token = std::move(m_tokens.front());
+    m_tokens.pop_front();
+    return std::move(token);
 }
 
 }

@@ -80,6 +80,24 @@ DEFINE_SIP_HEADER_WRITE(cseq) {
     os << h.method;
 }
 
+
+DEFINE_SIP_HEADER_READ(call_id) {
+    serialization::reader reader(is);
+    h.value = reader.read_while(serialization::is_textual_sequence);
+}
+
+DEFINE_SIP_HEADER_WRITE(call_id) {
+    os << h.value;
+}
+
+DEFINE_SIP_HEADER_READ(max_forwards) {
+    is >> h.value;
+}
+
+DEFINE_SIP_HEADER_WRITE(max_forwards) {
+    os << h.value;
+}
+
 DEFINE_SIP_HEADER_READ(content_length) {
     is >> h.length;
 }

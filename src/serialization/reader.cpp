@@ -108,5 +108,128 @@ std::string reader::read_until(const matcher matcher) {
     return std::move(result);
 }
 
+static constexpr bool is_text(const char c) {
+    return is_letter(c) || is_number(c) || c == '.' || c == '-' || c == '_';
+}
+
+tokenizer::tokenizer(std::istream& is)
+    : m_is(is)
+    , m_done(false)
+{}
+
+tokenizer::token tokenizer::next() {
+    token token{};
+
+    if (m_done) {
+        token.type = token_type::eof;
+        return token;
+    }
+
+    const auto ch_int = next_char();
+    if (ch_int < 0) {
+        // eof
+        m_done = true;
+        token.type = token_type::eof;
+        return token;
+    }
+
+    const auto ch = static_cast<char>(ch_int);
+    if (is_whitespace(ch)) {
+        eat_whitespaces();
+        token.type = token_type::whitespace;
+    } else if (is_tab(ch)) {
+        token.type = token_type::tab;
+    } else if (ch == '\r') {
+        if (eat('\n')) {
+            token.type = token_type::crlf;
+        } else {
+            token.type = token_type::cr;
+        }
+    } else if (ch == '\n') {
+        token.type = token_type::lf;
+    } else if (ch == ':') {
+        token.type = token_type::colon;
+    } else if (ch == ',') {
+        token.type = token_type::coma;
+    } else if (ch == '/') {
+        token.type = token_type::forward_slash;
+    } else if (ch == '\\') {
+        token.type = token_type::backward_slash;
+    } else if (ch == '<') {
+        token.type = token_type::less_than;
+    } else if (ch == '>') {
+        token.type = token_type::greater_than;
+    } else if (is_text(ch)) {
+        token.type = token_type::string;
+        token.str = read_string(ch);
+    } else if (ch == '"') {
+        token.type = token_type::open_string;
+        token.str = read_open_string();
+        if (!eat('"')) {
+            throw unexpected_character();
+        }
+    } else {
+        throw unexpected_character();
+    }
+
+    return token;
+}
+
+std::string tokenizer::read_string(const char initial_ch) {
+    std::string result;
+    result.reserve(16);
+    result.push_back(initial_ch);
+
+    auto peeked = m_is.peek();
+    while (peeked != EOF && is_text(static_cast<char>(peeked))) {
+        result.push_back(static_cast<char>(next_char()));
+        peeked = m_is.peek();
+    }
+
+    return std::move(result);
+}
+
+std::string tokenizer::read_open_string() {
+    std::string result;
+    result.reserve(16);
+
+    bool is_escaped = false;
+    auto peeked = m_is.peek();
+    while (peeked != EOF && (!is_escaped || peeked != '\"')) {
+        if (!is_escaped && peeked == '\\') {
+            is_escaped = true;
+        } else if (is_escaped) {
+            is_escaped = false;
+        }
+
+        result.push_back(static_cast<char>(next_char()));
+        peeked = m_is.peek();
+    }
+
+    return std::move(result);
+}
+
+bool tokenizer::eat(const char ch) {
+    const auto peeked = m_is.peek();
+    if (peeked == ch) {
+        next_char();
+        return true;
+    } else {
+        return false;
+    }
+}
+
+void tokenizer::eat_whitespaces() {
+    while (eat(' '));
+}
+
+int tokenizer::next_char() {
+    char ch;
+    if (m_is.get(ch)) {
+        return ch;
+    } else {
+        return EOF;
+    }
+}
 
 }

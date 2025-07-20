@@ -81,4 +81,44 @@ private:
     std::istream& m_is;
 };
 
+class tokenizer {
+public:
+    enum class token_type {
+        eof,
+        whitespace,
+        tab,
+        cr,
+        lf,
+        crlf,
+        colon,
+        coma,
+        forward_slash,
+        backward_slash,
+        less_than,
+        greater_than,
+        string,
+        open_string
+    };
+
+    struct token {
+        token_type type;
+        std::string str;
+    };
+
+    explicit tokenizer(std::istream& is);
+
+    token next();
+
+private:
+    std::string read_string(char initial_ch);
+    std::string read_open_string();
+
+    bool eat(char ch);
+    void eat_whitespaces();
+    int next_char();
+
+    std::istream& m_is;
+    bool m_done;
+};
+
 }

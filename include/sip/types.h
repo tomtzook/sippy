@@ -1,6 +1,7 @@
 #pragma once
 
 #include <iostream>
+#include <optional>
 
 namespace sippy::sip {
 
@@ -125,6 +126,9 @@ enum class auth_algorithm {
     aka,
     md5
 };
+
+std::optional<method> try_get_method(const std::string& str);
+std::optional<version> try_get_version(const std::string& str);
 
 status_class get_class(status_code code);
 

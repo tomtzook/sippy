@@ -50,6 +50,53 @@ public:
     }
 };
 
+std::unordered_map<std::string, method> m_str_to_method = {
+    {"INVITE", method::invite},
+    {"ACK", method::ack},
+    {"BYE", method::bye},
+    {"CANCEL", method::cancel},
+    {"UPDATE", method::update},
+    {"INFO", method::info},
+    {"SUBSCRIBE", method::subscribe},
+    {"NOTIFY", method::notify},
+    {"REFER", method::refer},
+    {"MESSAGE", method::message},
+    {"OPTIONS", method::options},
+    {"REGISTER", method::register_},
+};
+std::unordered_map<std::string, version> m_str_to_version = {
+    {"2.0", version::version_2_0}
+};
+std::unordered_map<std::string, transport> m_str_to_transport = {
+    {"TCP", transport::tcp},
+    {"UDP", transport::udp}
+};
+std::unordered_map<std::string, auth_scheme> m_str_to_authscheme = {
+    {"DIGEST", auth_scheme::digest}
+};
+std::unordered_map<std::string, auth_algorithm> m_str_to_authalgorithm = {
+    {"AKAv1-MD5", auth_algorithm::aka},
+    {"MD5", auth_algorithm::md5}
+};
+
+std::optional<method> try_get_method(const std::string& str) {
+    const auto it = m_str_to_method.find(str);
+    if (it != m_str_to_method.end()) {
+        return it->second;
+    } else {
+        return std::nullopt;
+    }
+}
+
+std::optional<version> try_get_version(const std::string& str) {
+    const auto it = m_str_to_version.find(str);
+    if (it != m_str_to_version.end()) {
+        return it->second;
+    } else {
+        return std::nullopt;
+    }
+}
+
 status_class get_class(const status_code code) {
     const auto code_int = static_cast<uint16_t>(code);
     if (code_int >= 100 && code_int <= 199) {
@@ -245,35 +292,6 @@ const char* transport_str(const transport transport) {
             throw unknown_transport();
     }
 }
-
-std::unordered_map<std::string, method> m_str_to_method = {
-    {"INVITE", method::invite},
-    {"ACK", method::ack},
-    {"BYE", method::bye},
-    {"CANCEL", method::cancel},
-    {"UPDATE", method::update},
-    {"INFO", method::info},
-    {"SUBSCRIBE", method::subscribe},
-    {"NOTIFY", method::notify},
-    {"REFER", method::refer},
-    {"MESSAGE", method::message},
-    {"OPTIONS", method::options},
-    {"REGISTER", method::register_},
-};
-std::unordered_map<std::string, version> m_str_to_version = {
-    {"2.0", version::version_2_0}
-};
-std::unordered_map<std::string, transport> m_str_to_transport = {
-    {"TCP", transport::tcp},
-    {"UDP", transport::udp}
-};
-std::unordered_map<std::string, auth_scheme> m_str_to_authscheme = {
-    {"DIGEST", auth_scheme::digest}
-};
-std::unordered_map<std::string, auth_algorithm> m_str_to_authalgorithm = {
-    {"AKAv1-MD5", auth_algorithm::aka},
-    {"MD5", auth_algorithm::md5}
-};
 
 std::istream& operator>>(std::istream& is, method& method) {
     serialization::reader reader(is);
