@@ -127,8 +127,8 @@ enum class auth_algorithm {
     md5
 };
 
-std::optional<method> try_get_method(const std::string& str);
-std::optional<version> try_get_version(const std::string& str);
+std::optional<method> try_get_method(std::string_view str);
+std::optional<version> try_get_version(std::string_view str);
 
 status_class get_class(status_code code);
 

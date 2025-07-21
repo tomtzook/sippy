@@ -3,6 +3,7 @@
 #include <istream>
 #include <cstdint>
 #include <exception>
+#include <vector>
 
 #include "matchers.h"
 
@@ -81,35 +82,75 @@ private:
     std::istream& m_is;
 };
 
-class tokenizer {
-public:
-    enum class token_type {
-        eof,
-        whitespace,
-        tab,
-        cr,
-        lf,
-        crlf,
-        colon,
-        coma,
-        forward_slash,
-        backward_slash,
-        less_than,
-        greater_than,
-        string,
-        open_string
-    };
+enum class token_type {
+    eof,
+    whitespace,
+    tab,
+    cr,
+    lf,
+    crlf,
+    colon,
+    coma,
+    forward_slash,
+    backward_slash,
+    less_than,
+    greater_than,
+    string,
+    open_string
+};
 
-    struct token {
+struct token {
+    token_type type;
+    std::string_view str;
+};
+
+enum class sequence_flags {
+    none = 0,
+    optional = 1
+};
+
+sequence_flags inline operator&(sequence_flags lhs, sequence_flags rhs) {
+    return static_cast<sequence_flags>(static_cast<int>(lhs) & static_cast<int>(rhs));
+}
+
+struct sequence {
+    enum class seq_type {
+        token,
+        matcher
+    };
+    struct match {
+        bool matched;
+        union {
+            int a;
+        } v;
+    };
+    using matcher_func = match(*)(const token& token);
+    struct seq_token {
+        seq_type type;
+        sequence_flags flags;
+        union {
+            token_type token;
+            matcher_func matcher;
+        } v;
+    };
+};
+
+class lexer {
+public:
+    explicit lexer(std::istream& is);
+    explicit lexer(const std::vector<token>& tokens);
+
+    token_type peek();
+    token next();
+    void go_back(size_t count);
+
+private:
+    struct token_storage {
         token_type type;
         std::string str;
     };
 
-    explicit tokenizer(std::istream& is);
-
-    token next();
-
-private:
+    token_storage new_raw_token();
     std::string read_string(char initial_ch);
     std::string read_open_string();
 
@@ -117,8 +158,10 @@ private:
     void eat_whitespaces();
     int next_char();
 
-    std::istream& m_is;
+    std::istream* m_is;
     bool m_done;
+    std::vector<token_storage> m_read_tokens;
+    size_t m_token_index;
 };
 
 }

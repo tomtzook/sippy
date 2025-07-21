@@ -23,95 +23,55 @@ private:
     serialization::reader m_reader;
 };
 
-class lexer {
-public:
-    enum class token_type {
-        eof,
-        whitespace,
-        tab,
-        colon,
-        coma,
-        new_line,
-        string,
-        version,
-        method
-    };
-
-    struct token {
-        token_type type = token_type::eof;
-        union {
-            sip::version version;
-            sip::method method;
-        } v;
-        std::string_view str;
-    };
-
-    explicit lexer(std::istream& is);
-
-    template<typename T>
-    T next() = delete;
-    template<>
-    version next();
-    template<>
-    method next();
-
-    token next();
-    token next(token_type expected_type, bool eat_whitespaces = false);
-
-private:
-    std::optional<version> try_read_version(const serialization::tokenizer::token& c_token);
-
-    const serialization::tokenizer::token& next_token();
-    void go_back(size_t count);
-
-    serialization::tokenizer m_tokenizer;
-    std::vector<serialization::tokenizer::token> m_read_tokens;
-    size_t m_token_index;
-};
-
-class header_line_parser {
-public:
-    explicit header_line_parser(lexer& lexer);
-private:
-    void parse();
-
-    enum class state {
-        start,
-        name_value,
-        name_end,
-        value_start
-    };
-
-    lexer& m_lexer;
-    state m_state;
-};
-
 class parser {
 public:
-    explicit parser(std::istream& is);
+    struct space {};
+    struct new_line {};
+    struct colon {};
+
+    explicit parser(serialization::lexer& lexer);
+
+    /*template<typename T>
+    T read() = delete;
+    template<>
+    space read<space>();
+    template<>
+    new_line read();
+    template<>
+    colon read();
+    template<>
+    std::string_view read();
+    template<>
+    version read();
+    template<>
+    method read();*/
+
+    void consume_whitespace();
+
+    serialization::token next_token();
+    serialization::token next_token(serialization::token_type expected_type);
 
 private:
-    enum class state {
-        start_line_start,
-        request_line_uri,
-        request_line_version,
-        response_line_code,
-        response_line_phrase,
-        header_name_start,
-        header_name_end,
-        header_value
-    };
+    std::optional<version> try_read_version(const serialization::token& c_token);
 
-    void parse_next();
+    serialization::lexer& m_lexer;
+};
+
+class msg_parser {
+public:
+    explicit msg_parser(std::istream& is);
+
+private:
+
     void parse_header_line();
-    std::vector<lexer::token> next_header_value_tokens();
+    std::vector<serialization::token> next_header_value_tokens();
 
     void load();
-    [[nodiscard]] lexer::token_type peek_next() const;
-    lexer::token next();
+    [[nodiscard]] serialization::token_type peek_next() const;
+    serialization::token next();
 
-    lexer m_lexer;
-    std::deque<lexer::token> m_tokens;
+    serialization::lexer m_lexer;
+    std::deque<serialization::token> m_tokens;
 };
 
 }

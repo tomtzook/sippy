@@ -125,104 +125,95 @@ void header_reader::eat_new_line() {
     m_reader.eat('\n');
 }
 
-static void verify_token_type(const lexer::token& token, const lexer::token_type type) {
+static void verify_token_type(const serialization::token& token, const serialization::token_type type) {
     if (token.type != type) {
         throw unexpected_token();
     }
 }
 
-lexer::lexer(std::istream& is)
-    : m_tokenizer(is)
-    , m_read_tokens()
-    , m_token_index(0)
+parser::parser(serialization::lexer& lexer)
+    : m_lexer(lexer)
 {}
 
-template<>
-version lexer::next<version>() {
-    return next(token_type::version).v.version;
+/*template<>
+parser::space parser::read<parser::space>() {
+    next_token(serialization::token_type::whitespace);
+    return {};
 }
 
 template<>
-method lexer::next<method>() {
-    return next(token_type::method).v.method;
+parser::new_line parser::read<parser::new_line>() {
+    next_token(serialization::token_type::crlf);
+    return {};
 }
 
-lexer::token lexer::next() {
-    const auto& c_token = next_token();
+template<>
+parser::colon parser::read<parser::colon>() {
+    next_token(serialization::token_type::colon);
+    return {};
+}
 
-    token token{};
-    switch (c_token.type) {
-        case serialization::tokenizer::token_type::eof:
-            token.type = token_type::eof;
-            break;
-        case serialization::tokenizer::token_type::whitespace:
-            token.type = token_type::whitespace;
-            break;
-        case serialization::tokenizer::token_type::tab:
-            token.type = token_type::tab;
-            break;
-        case serialization::tokenizer::token_type::crlf:
-            token.type = token_type::new_line;
-            break;
-        case serialization::tokenizer::token_type::colon:
-            token.type = token_type::colon;
-            break;
-        case serialization::tokenizer::token_type::coma:
-            token.type = token_type::coma;
-            break;
-        case serialization::tokenizer::token_type::string: {
-            const auto ver_opt = try_read_version(c_token);
-            if (ver_opt) {
-                token.type = token_type::version;
-                token.v.version = ver_opt.value();
-                break;
-            }
+template<>
+std::string_view parser::read<std::string_view>() {
+    return next_token(serialization::token_type::string).str;
+}
 
-            const auto method_opt = try_get_method(c_token.str);
-            if (method_opt) {
-                token.type = token_type::method;
-                token.v.method = method_opt.value();
-                break;
-            }
-
-            token.type = token_type::string;
-            token.str = c_token.str;
-            break;
-        }
-        default:
-            throw unexpected_token();
+template<>
+version parser::read<version>() {
+    const auto& token = next_token(serialization::token_type::string);
+    const auto ver_opt = try_read_version(token);
+    if (ver_opt) {
+        return ver_opt.value();
     }
 
+    throw unexpected_token();
+}
+
+template<>
+method parser::read<method>() {
+    const auto& token = next_token(serialization::token_type::string);
+    const auto method_opt = try_get_method(token.str);
+    if (method_opt) {
+        return method_opt.value();
+    }
+
+    throw unexpected_token();
+}*/
+
+void parser::consume_whitespace() {
+    const auto token = next_token();
+    if (token.type != serialization::token_type::whitespace) {
+        m_lexer.go_back(1);
+    }
+}
+
+serialization::token parser::next_token() {
+    return m_lexer.next();
+}
+
+serialization::token parser::next_token(const serialization::token_type expected_type) {
+    const auto token = next_token();
+    verify_token_type(token, expected_type);
     return token;
 }
 
-lexer::token lexer::next(const token_type expected_type, const bool eat_whitespaces) {
-    token token;
-    do {
-        token = next();
-    } while (eat_whitespaces && token.type == token_type::whitespace);
-
-    verify_token_type(token, expected_type);
-    return std::move(token);
-}
-
-std::optional<version> lexer::try_read_version(const serialization::tokenizer::token& c_token) {
-    if (c_token.type != serialization::tokenizer::token_type::string || strcasecmp(c_token.str.c_str(), "SIP") != 0) {
+std::optional<version> parser::try_read_version(const serialization::token& c_token) {
+    if (c_token.type != serialization::token_type::string || strcasecmp(c_token.str.data(), "SIP") != 0) {
         return std::nullopt;
     }
 
     {
-        const auto& token = next_token();
-        if (token.type != serialization::tokenizer::token_type::forward_slash) {
-            go_back(1);
+        const auto token = next_token();
+        if (token.type != serialization::token_type::forward_slash) {
+            m_lexer.go_back(1);
             return std::nullopt;
         }
     }
 
     {
-        const auto& token = next_token();
-        if (token.type != serialization::tokenizer::token_type::string) {
-            go_back(2);
+        const auto token = next_token();
+        if (token.type != serialization::token_type::string) {
+            m_lexer.go_back(2);
             return std::nullopt;
         }
 
@@ -230,95 +221,30 @@ std::optional<version> lexer::try_read_version(const serialization::tokenizer::t
         if (version_opt) {
             return version_opt.value();
         } else {
-            go_back(2);
+            m_lexer.go_back(2);
             return std::nullopt;
         }
     }
 }
 
-const serialization::tokenizer::token& lexer::next_token() {
-    m_token_index++;
-    if (m_token_index >= m_read_tokens.size()) {
-        auto token = m_tokenizer.next();
-        m_read_tokens.push_back(std::move(token));
-    }
-
-    return m_read_tokens[m_token_index-1];
-}
-
-void lexer::go_back(const size_t count) {
-    if (count > m_token_index) {
-        throw std::runtime_error("not enough history to go back requested amount");
-    }
-
-    m_token_index -= count;
-}
-
-void header_line_parser::parse() {
-    switch (m_state) {
-        case state::start:
-            m_state = state::name_value;
-            break;
-        case state::name_value: {
-            const auto token = m_lexer.next();
-            if (token.type != lexer::token_type::whitespace) {
-                verify_token_type(token, lexer::token_type::string);
-                m_state = state::name_end;
-            }
-            break;
-        }
-    }
-}
-
-parser::parser(std::istream& is)
+msg_parser::msg_parser(std::istream& is)
     : m_lexer(is)
-    , m_state(state::start_line_start)
 {}
 
-void parser::parse_next() {
-    const auto token = m_lexer.next();
-
-    switch (m_state) {
-        case state::start_line_start:
-            if (token.type == lexer::token_type::method) {
-                m_state_data.request_line.method = token.v.method;
-                m_state = state::request_line_uri;
-            } else if (token.type == lexer::token_type::version) {
-                m_state_data.response_line.version = token.v.version;
-                m_state = state::response_line_code;
-            } else {
-                throw unexpected_token();
-            }
-            break;
-        case state::request_line_uri:
-            verify_token_type(token, lexer::token_type::uri);
-            break;
-        case state::request_line_version:
-            verify_token_type(token, lexer::token_type::version);
-            m_state_data.response_line.version = token.v.version;
-
-            break;
-        case state::header_name_start:
-            verify_token_type(token, lexer::token_type::string);
-            m_state_data.header_name = token.str;
-            m_state = state::header_name_end;
-            break;
-        case state::header_name_end:
-            verify_token_type(token, lexer::token_type::colon);
-            m_state = state::header_value;
-            break;
+void msg_parser::parse_header_line() {
+    // name reading
+    std::string_view name;
+    {
+        parser parser(m_lexer);
+        name = "";//parser.read<std::string_view>();
+        parser.consume_whitespace();
+        //parser.read<parser::colon>();
+        parser.consume_whitespace();
     }
 
-}
-
-void parser::parse_header_line() {
-    // name reading
-    const auto name = m_lexer.next(lexer::token_type::string).str;
-    m_lexer.next(lexer::token_type::colon, true);
-
     // value loading
-    bool first = true;
-    std::vector<lexer::token> value_tokens;
+    /*bool first = true;
+    std::vector<serialization::token> value_tokens;
     do {
         value_tokens = next_header_value_tokens();
 
@@ -337,26 +263,33 @@ void parser::parse_header_line() {
         if (first) {
             first = false;
         }
-    } while (!value_tokens.empty());
+
+        auto holder = def->create();
+        {
+            serialization::lexer val_lexer(value_tokens);
+            //holder->read(val_lexer);
+        }
+        //m_message->_add_header(name, std::move(holder));
+    } while (!value_tokens.empty());*/
 }
 
-std::vector<lexer::token> parser::next_header_value_tokens() {
-    std::vector<lexer::token> tokens;
+std::vector<serialization::token> msg_parser::next_header_value_tokens() {
+    std::vector<serialization::token> tokens;
     bool first = true;
     bool done = false;
     do {
         auto token = next();
         // ignore initial whitespaces
         if (first) {
-            if (token.type == lexer::token_type::whitespace) {
+            if (token.type == serialization::token_type::whitespace) {
                 continue;
             }
 
             first = false;
         }
 
-        if (token.type == lexer::token_type::new_line) {
-            if (util::is_any_of(peek_next(), lexer::token_type::whitespace, lexer::token_type::tab)) {
+        if (token.type == serialization::token_type::crlf) {
+            if (util::is_any_of(peek_next(), serialization::token_type::whitespace, serialization::token_type::tab)) {
                 // more data to read in next line
                 next(); // get rid of first sp or only tab
                 first = true;
@@ -364,7 +297,7 @@ std::vector<lexer::token> parser::next_header_value_tokens() {
             } else {
                 done = true;
             }
-        } else if (token.type == lexer::token_type::coma) {
+        } else if (token.type == serialization::token_type::coma) {
             done = true;
         } else {
             tokens.push_back(std::move(token));
@@ -374,23 +307,23 @@ std::vector<lexer::token> parser::next_header_value_tokens() {
     return tokens;
 }
 
-void parser::load() {
-    lexer::token token;
+void msg_parser::load() {
+    serialization::token token;
     do {
         token = m_lexer.next();
         m_tokens.push_back(token);
-    } while (token.type != lexer::token_type::eof);
+    } while (token.type != serialization::token_type::eof);
 }
 
-lexer::token_type parser::peek_next() const {
+serialization::token_type msg_parser::peek_next() const {
     if (m_tokens.empty()) {
-        return lexer::token_type::eof;
+        return serialization::token_type::eof;
     }
 
     return m_tokens.front().type;
 }
 
-lexer::token parser::next() {
+serialization::token msg_parser::next() {
     auto token = std::move(m_tokens.front());
     m_tokens.pop_front();
     return std::move(token);

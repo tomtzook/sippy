@@ -1,7 +1,7 @@
 
 #include <exception>
 #include <cstdint>
-#include <unordered_map>
+#include <map>
 
 #include <sip/types.h>
 #include "serialization/reader.h"
@@ -50,7 +50,7 @@ public:
     }
 };
 
-std::unordered_map<std::string, method> m_str_to_method = {
+std::map<std::string, method, std::less<>> m_str_to_method = {
     {"INVITE", method::invite},
     {"ACK", method::ack},
     {"BYE", method::bye},
@@ -64,22 +64,22 @@ std::unordered_map<std::string, method> m_str_to_method = {
     {"OPTIONS", method::options},
     {"REGISTER", method::register_},
 };
-std::unordered_map<std::string, version> m_str_to_version = {
+std::map<std::string, version, std::less<>> m_str_to_version = {
     {"2.0", version::version_2_0}
 };
-std::unordered_map<std::string, transport> m_str_to_transport = {
+std::map<std::string, transport, std::less<>> m_str_to_transport = {
     {"TCP", transport::tcp},
     {"UDP", transport::udp}
 };
-std::unordered_map<std::string, auth_scheme> m_str_to_authscheme = {
+std::map<std::string, auth_scheme, std::less<>> m_str_to_authscheme = {
     {"DIGEST", auth_scheme::digest}
 };
-std::unordered_map<std::string, auth_algorithm> m_str_to_authalgorithm = {
+std::map<std::string, auth_algorithm, std::less<>> m_str_to_authalgorithm = {
     {"AKAv1-MD5", auth_algorithm::aka},
     {"MD5", auth_algorithm::md5}
 };
 
-std::optional<method> try_get_method(const std::string& str) {
+std::optional<method> try_get_method(const std::string_view str) {
     const auto it = m_str_to_method.find(str);
     if (it != m_str_to_method.end()) {
         return it->second;
@@ -88,7 +88,7 @@ std::optional<method> try_get_method(const std::string& str) {
     }
 }
 
-std::optional<version> try_get_version(const std::string& str) {
+std::optional<version> try_get_version(const std::string_view str) {
     const auto it = m_str_to_version.find(str);
     if (it != m_str_to_version.end()) {
         return it->second;

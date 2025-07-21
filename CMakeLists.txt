@@ -25,10 +25,19 @@ add_library(sippy STATIC
         src/sip/bodies_read_write.cpp
         src/sip/types_storage.cpp
         src/sip/reader.cpp
-        src/sip/writer.cpp)
+        src/sip/writer.cpp
+        src/lang/lexer.h
+        src/lang/lexer.cpp
+        src/lang/nfa.h
+        src/lang/nfa.cpp)
 target_link_libraries(sippy looper)
 target_include_directories(sippy
         PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        PRIVATE
+        #PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src)
+
+add_executable(test test.cpp)
+target_link_libraries(test sippy looper)
+add_executable(test2 nna.cpp)
+target_link_libraries(test2 sippy looper)
