@@ -8,7 +8,18 @@ template<typename T>
 class nfa {
 public:
     using state = size_t;
+    using group = size_t;
     using matcher_func = bool(*)(const T&);
+
+    struct group_match {
+        group id;
+        size_t start;
+        ssize_t end;
+    };
+    struct match {
+        bool matched;
+        std::vector<group_match> groups;
+    };
 
     nfa();
 
@@ -19,7 +30,9 @@ public:
     state add_state(const char* name, bool is_end = false);
     void add_transition(state src, state dst, const char* name, matcher_func matcher, bool consumes = true);
 
-    [[nodiscard]] bool compute(const std::vector<T>& values) const;
+    group new_group(state start, state end);
+
+    [[nodiscard]] match compute(const std::vector<T>& values) const;
 
 private:
     struct transition {
@@ -33,21 +46,28 @@ private:
         const char* name;
         bool is_end;
         std::vector<transition> transitions;
+        std::vector<group> group_starts;
+        std::vector<group> group_ends;
     };
     struct stack_node {
-        size_t str_index;
+        size_t pos;
         state state_id;
+        std::vector<group_match> groups;
     };
+
+    void process_groups(stack_node& node) const;
 
     void append(const nfa& other, state join_state);
     void redirect_ends_to(state end_state);
 
-    void copy_state(const state_node& other, size_t id_offset = 0);
+    void copy_state(const state_node& other, size_t id_offset = 0, size_t group_offset = 0);
     std::pair<state, state_node&> add_state_internal(const char* name, bool is_end);
     void add_transition_internal(state_node& node, state dest, const char* name, matcher_func matcher, bool consumes = true);
     void copy_transitions(state_node& first, const state_node& other, size_t id_offset = 0);
+    void copy_groups(state_node& first, const state_node& other, size_t id_offset = 0);
 
     std::vector<state_node> m_states;
+    group m_next_group_id;
 
     template<typename T2>
     friend nfa<T2> sequence(const nfa<T2>& first, const nfa<T2>& second, typename nfa<T2>::state join_state);
@@ -58,6 +78,7 @@ private:
 template<typename T>
 nfa<T>::nfa()
     : m_states()
+    , m_next_group_id(0)
 {}
 
 template<typename T>
@@ -96,44 +117,83 @@ void nfa<T>::add_transition(const state src, const state dst, const char* name, 
 }
 
 template<typename T>
-bool nfa<T>::compute(const std::vector<T>& values) const {
+typename nfa<T>::group nfa<T>::new_group(state start, state end) {
+    auto group = ++m_next_group_id;
+
+    auto& start_state = m_states[start];
+    auto& end_state = m_states[end];
+
+    start_state.group_starts.push_back(group);
+    end_state.group_ends.push_back(group);
+
+    return group;
+}
+
+template<typename T>
+typename nfa<T>::match nfa<T>::compute(const std::vector<T>& values) const {
     std::stack<stack_node> stack;
     // state 0 is always the initial
     stack.push({0, 0});
 
     while (!stack.empty()) {
-        const auto c_item = stack.top();
+        auto c_item = std::move(stack.top());
         stack.pop();
+
+        process_groups(c_item);
 
         const auto& state = m_states[c_item.state_id];
         if (state.is_end) {
             // done
-            return true;
+            match match{};
+            match.matched = true;
+            match.groups = std::move(c_item.groups);
+
+            return std::move(match);
         }
 
-        const auto& token = values[c_item.str_index];
+        const auto& token = values[c_item.pos];
         for (auto it = state.transitions.rbegin(); it != state.transitions.rend(); ++it) {
             if (it->matcher == nullptr || it->matcher(token)) {
-                const auto next_str_index = it->consumes ? c_item.str_index + 1 : c_item.str_index;
-                stack.push({next_str_index, it->dest_state});
+                const auto next_pos = it->consumes ? c_item.pos + 1 : c_item.pos;
+                stack.push({next_pos, it->dest_state, c_item.groups});
             }
         }
     }
 
-    return false;
+    return {false};
+}
+
+template<typename T>
+void nfa<T>::process_groups(stack_node& node) const {
+    const auto& state = m_states[node.state_id];
+    for (const auto& group : state.group_starts) {
+        group_match match{group, node.pos, -1};
+        node.groups.push_back(match);
+    }
+
+    for (const auto& group : state.group_ends) {
+        for (auto& match : node.groups) {
+            if (match.id == group) {
+                match.end = node.pos;
+                break;
+            }
+        }
+    }
 }
 
 template<typename T>
 void nfa<T>::append(const nfa& other, const state join_state) {
     // copy states from second, excluding start, adjust ids
-    const auto id_offset = other.m_states.size() - 1;
+    const auto id_offset = m_states.size() - 1;
+    const auto group_offset = m_next_group_id;
     for (auto it = other.m_states.begin() + 1; it != other.m_states.end(); ++it) {
-        copy_state(*it, id_offset);
+        copy_state(*it, id_offset, group_offset);
     }
 
     // join state is the new start for second
     auto& join_state_node = m_states[join_state];
-    copy_transitions(join_state_node, other.m_states[0], id_offset + 1);
+    copy_transitions(join_state_node, other.m_states[0], id_offset);
+    copy_groups(join_state_node, other.m_states[0], group_offset);
     join_state_node.is_end = false;
 }
 
@@ -148,9 +208,11 @@ void nfa<T>::redirect_ends_to(const state end_state) {
 }
 
 template<typename T>
-void nfa<T>::copy_state(const state_node& other, const size_t id_offset) {
+void nfa<T>::copy_state(const state_node& other, const size_t id_offset, const size_t group_offset) {
     auto [id, state] = add_state_internal(other.name, other.is_end);
+
     copy_transitions(state, other, id_offset);
+    copy_groups(state, other, group_offset);
 }
 
 template<typename T>
@@ -181,6 +243,16 @@ void nfa<T>::copy_transitions(state_node& first, const state_node& other, const 
 }
 
 template<typename T>
+void nfa<T>::copy_groups(state_node& first, const state_node& other, size_t id_offset) {
+    for (const auto& group : other.group_starts) {
+        first.group_starts.push_back(group + id_offset);
+    }
+    for (const auto& group : other.group_ends) {
+        first.group_ends.push_back(group + id_offset);
+    }
+}
+
+template<typename T>
 nfa<T> one_step(const typename nfa<T>::matcher_func matcher) {
     nfa<T> nfa;
     const auto state_0 = nfa.add_state("q0");
@@ -204,6 +276,7 @@ nfa<T> sequence(const nfa<T>& first, const nfa<T>& second, const typename nfa<T>
         new_nfa.copy_state(state);
     }
 
+    new_nfa.m_next_group_id = first.m_next_group_id;
     new_nfa.append(second, join_state);
 
     return std::move(new_nfa);
