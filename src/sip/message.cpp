@@ -3,7 +3,6 @@
 
 #include "serialization/matchers.h"
 #include "serialization/reader.h"
-#include "sip/base.h"
 
 namespace sippy::sip {
 
