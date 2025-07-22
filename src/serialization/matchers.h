@@ -33,6 +33,10 @@ static constexpr bool is_dot(const char c) {
     return c == '.';
 }
 
+static constexpr bool is_semicolon(const char c) {
+    return c == ';';
+}
+
 static constexpr bool is_new_line(const char ch) {
     return ch == '\r' || ch == '\n';
 }

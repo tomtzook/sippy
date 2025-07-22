@@ -47,4 +47,25 @@ std::optional<std::shared_ptr<_base_body_def>> get_body(const std::string &name)
 
 }
 
+
+void __attribute__((constructor)) register_known_types() {
+    headers::register_header<headers::from>();
+    headers::register_header<headers::to>();
+    headers::register_header<headers::contact>();
+    headers::register_header<headers::cseq>();
+    headers::register_header<headers::call_id>();
+    headers::register_header<headers::content_length>();
+    headers::register_header<headers::content_type>();
+    headers::register_header<headers::max_forwards>();
+    headers::register_header<headers::expires>();
+    headers::register_header<headers::min_expires>();
+    headers::register_header<headers::record_route>();
+    headers::register_header<headers::route>();
+    headers::register_header<headers::subject>();
+    headers::register_header<headers::allow>();
+    headers::register_header<headers::server>();
+
+    bodies::register_body<bodies::test>();
+}
+
 }
