@@ -220,7 +220,6 @@ bool reader::parse_next_header() {
     }
     auto& value = valueOpt.value();
 
-    fixup_header_name(name);
     load_header_values(name, std::move(value));
 
     return true;

@@ -72,7 +72,7 @@ std::map<std::string, transport, std::less<>> m_str_to_transport = {
     {"UDP", transport::udp}
 };
 std::map<std::string, auth_scheme, std::less<>> m_str_to_authscheme = {
-    {"DIGEST", auth_scheme::digest}
+    {"Digest", auth_scheme::digest}
 };
 std::map<std::string, auth_algorithm, std::less<>> m_str_to_authalgorithm = {
     {"AKAv1-MD5", auth_algorithm::aka},
@@ -446,7 +446,7 @@ std::ostream& operator<<(std::ostream& os, const auth_scheme auth_scheme) {
 
 std::istream& operator>>(std::istream& is, auth_algorithm& auth_algorithm) {
     serialization::reader reader(is);
-    const auto line = reader.read_while(serialization::is_letter_or_dash);
+    const auto line = reader.read_while(serialization::is_letter_number_or_dash);
 
     const auto it = m_str_to_authalgorithm.find(line);
     if (it != m_str_to_authalgorithm.end()) {

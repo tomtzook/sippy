@@ -1,6 +1,7 @@
 #pragma once
 
 #include <map>
+#include <span>
 #include <vector>
 
 #include <sip/types.h>
@@ -36,6 +37,12 @@ class reader;
 class writer;
 class message;
 using message_ptr = std::unique_ptr<message>;
+
+message_ptr parse(std::istream& is);
+message_ptr parse(std::span<const uint8_t> buffer);
+
+void write(std::ostream& os, message_ptr message);
+ssize_t write(std::span<uint8_t> buffer, message_ptr message);
 
 class message {
 public:

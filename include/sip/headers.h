@@ -177,7 +177,7 @@ DECLARE_SIP_HEADER(via, "Via", flag_priority_top | flag_allow_multiple) {
     sip::version version;
     sip::transport transport;
     std::string host;
-    uint16_t port;
+    std::optional<uint16_t> port;
     std::map<std::string, std::string> tags;
 };
 
@@ -228,4 +228,26 @@ DECLARE_SIP_HEADER(subject, "Subject", flag_none) {
 
 DECLARE_SIP_HEADER(allow, "Allow", flag_allow_multiple) {
     sip::method method;
+};
+
+DECLARE_SIP_HEADER(authorization, "Authorization", flag_none) {
+    auth_scheme scheme;
+    std::string username;
+    std::string uri;
+    std::string realm;
+    auth_algorithm algorithm;
+    std::string qop;
+    std::string nonce;
+    std::optional<uint16_t> nc;
+    std::optional<std::string> cnonce;
+    std::optional<std::string> response;
+};
+
+DECLARE_SIP_HEADER(www_authorization, "WWW-Authenticate", flag_none) {
+    auth_scheme scheme;
+    std::string uri;
+    std::string realm;
+    auth_algorithm algorithm;
+    std::string qop;
+    std::string nonce;
 };

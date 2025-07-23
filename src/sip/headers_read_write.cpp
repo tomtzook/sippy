@@ -1,4 +1,6 @@
+#include <iomanip>
 #include <regex>
+
 #include <sip/headers.h>
 
 #include "serialization/reader.h"
@@ -7,7 +9,26 @@
 using namespace sippy::sip;
 
 static std::map<std::string, std::string> parse_tags(std::string& str) {
-    std::regex regex(R"((?:\s*;\s*(\w+)=([\d\w@\-\.\+]+)))");
+    // with ; as delim
+    std::regex regex(R"((?:\s*;\s*(\w+)=(?:\")?([\d\w@\-\.\+]+)(?:\")?))");
+    std::smatch match;
+    std::map<std::string, std::string> tags;
+
+    while (std::regex_search(str, match, regex)) {
+        tags.emplace(match.str(1), match.str(2));
+        str = match.suffix();
+    }
+
+    return std::move(tags);
+}
+
+static std::map<std::string, std::string> parse_params(std::string& str) {
+    // with , as delim
+    if (str[0] != ',') {
+        str = ',' + str;
+    }
+
+    std::regex regex(R"((?:\s*,\s*(\w+)=(?:\")?([\d\w@\-\.\+/=]+)(?:\")?))");
     std::smatch match;
     std::map<std::string, std::string> tags;
 
@@ -134,8 +155,17 @@ DEFINE_SIP_HEADER_READ(via) {
     is >> h.transport;
 
     reader.eat_while(serialization::is_whitespace);
-    h.host = reader.read_until(serialization::is_colon);
-    is >> h.port;
+    h.host = reader.read_until(serialization::is_colon_or_semicolon);
+
+    if (reader.peek(':')) {
+        reader.eat(':');
+
+        uint16_t v;
+        is >> v;
+        h.port = v;
+    } else {
+        h.port = std::nullopt;
+    }
 
     {
         auto str = reader.read_until(serialization::is_new_line);
@@ -145,13 +175,14 @@ DEFINE_SIP_HEADER_READ(via) {
 
 DEFINE_SIP_HEADER_WRITE(via) {
     os << h.version;
-    os << ' ';
+    os << '/';
     os << h.transport;
     os << ' ';
     os << h.host;
-    os << ':';
-    os << h.port;
-    os << ' ';
+    if (h.port) {
+        os << ':';
+        os << h.port.value();
+    }
     write_tags(os, h.tags);
 }
 
@@ -273,4 +304,90 @@ DEFINE_SIP_HEADER_READ(allow) {
 
 DEFINE_SIP_HEADER_WRITE(allow) {
     os << h.method;
+}
+
+DEFINE_SIP_HEADER_READ(authorization) {
+    serialization::reader reader(is);
+    is >> h.scheme;
+    reader.eat_while(serialization::is_whitespace);
+
+    auto str = reader.read_until(serialization::is_new_line);
+    auto tags = parse_params(str);
+    h.username = tags["username"];
+    h.uri = tags["uri"];
+    h.realm = tags["realm"];
+    h.qop = tags["qop"];
+    h.nonce = tags["nonce"];
+
+    {
+        std::stringstream ss(tags["algorithm"]);
+        ss >> h.algorithm;
+    }
+
+    if (tags.contains("nc")) {
+        h.nc = std::stoi(tags["nc"]);
+    } else {
+        h.nc = std::nullopt;
+    }
+
+    if (tags.contains("cnonce")) {
+        h.cnonce = tags["cnonce"];
+    } else {
+        h.cnonce = std::nullopt;
+    }
+
+    if (tags.contains("response")) {
+        h.response = tags["response"];
+    } else {
+        h.response = std::nullopt;
+    }
+}
+
+DEFINE_SIP_HEADER_WRITE(authorization) {
+    os << h.scheme;
+    os << ' ';
+    os << "username=\"" << h.username << "\"";
+    os << ",uri=\"" << h.uri << "\"";
+    os << ",realm=\"" << h.realm << "\"";
+    os << ",qop=" << h.qop << "";
+    os << ",nonce=\"" << h.nonce << "\"";
+    os << ",algorithm=" << h.algorithm << "";
+
+    if (h.cnonce) {
+        os << ",cnonce=\"" << h.cnonce.value() << "\"";
+    }
+    if (h.response) {
+        os << ",response=\"" << h.response.value() << "\"";
+    }
+    if (h.nc) {
+        os << ",nc=" << std::setfill('0') << std::setw(8) << h.nc.value();
+    }
+}
+
+DEFINE_SIP_HEADER_READ(www_authorization) {
+    serialization::reader reader(is);
+    is >> h.scheme;
+    reader.eat_while(serialization::is_whitespace);
+
+    auto str = reader.read_until(serialization::is_new_line);
+    auto tags = parse_params(str);
+    h.uri = tags["uri"];
+    h.realm = tags["realm"];
+    h.qop = tags["qop"];
+    h.nonce = tags["nonce"];
+
+    {
+        std::stringstream ss(tags["algorithm"]);
+        ss >> h.algorithm;
+    }
+}
+
+DEFINE_SIP_HEADER_WRITE(www_authorization) {
+    os << h.scheme;
+    os << ' ';
+    os << "uri=\"" << h.uri << "\"";
+    os << ",realm=\"" << h.realm << "\"";
+    os << ",qop=" << h.qop << "";
+    os << ",nonce=\"" << h.nonce << "\"";
+    os << ",algorithm=" << h.algorithm << "";
 }

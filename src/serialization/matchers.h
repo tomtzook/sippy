@@ -25,6 +25,10 @@ static constexpr bool is_colon(const char c) {
     return c == ':';
 }
 
+static constexpr bool is_colon_or_semicolon(const char c) {
+    return c == ':' || c == ';';
+}
+
 static constexpr bool is_number(const char c) {
     return c >= '0' && c <= '9';
 }
@@ -43,6 +47,10 @@ static constexpr bool is_new_line(const char ch) {
 
 static constexpr bool is_letter_or_dash(const char c) {
     return is_letter(c) || is_dash(c);
+}
+
+static constexpr bool is_letter_number_or_dash(const char c) {
+    return is_letter(c) || is_number(c) || is_dash(c);
 }
 
 static constexpr bool is_number_or_dot(const char c) {

@@ -3,6 +3,9 @@
 
 #include "serialization/matchers.h"
 #include "serialization/reader.h"
+#include "reader.h"
+#include "writer.h"
+#include "util/streams.h"
 
 namespace sippy::sip {
 
@@ -100,6 +103,34 @@ std::ostream& operator<<(std::ostream& os, const status_line& line) {
     os << line.reason_phrase;
 
     return os;
+}
+
+message_ptr parse(std::istream& is) {
+    reader reader(is);
+    reader.reset();
+    reader.parse_headers();
+    reader.parse_body();
+    return reader.release();
+}
+
+message_ptr parse(const std::span<const uint8_t> buffer) {
+    util::istream_buff buff(buffer);
+    std::istream is(&buff);
+    return parse(is);
+}
+
+void write(std::ostream& os, message_ptr message) {
+    writer writer(os);
+    writer.attach(std::move(message));
+    writer.write();
+}
+
+ssize_t write(const std::span<uint8_t> buffer, message_ptr message) {
+    util::ostream_buff buff(buffer);
+    std::ostream os(&buff);
+    write(os, std::move(message));
+
+    return os.tellp();
 }
 
 bool message::is_valid() const {

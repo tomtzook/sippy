@@ -54,6 +54,7 @@ void __attribute__((constructor)) register_known_types() {
     headers::register_header<headers::contact>();
     headers::register_header<headers::cseq>();
     headers::register_header<headers::call_id>();
+    headers::register_header<headers::via>();
     headers::register_header<headers::content_length>();
     headers::register_header<headers::content_type>();
     headers::register_header<headers::max_forwards>();
@@ -64,6 +65,8 @@ void __attribute__((constructor)) register_known_types() {
     headers::register_header<headers::subject>();
     headers::register_header<headers::allow>();
     headers::register_header<headers::server>();
+    headers::register_header<headers::authorization>();
+    headers::register_header<headers::www_authorization>();
 
     bodies::register_body<bodies::test>();
 }
