@@ -113,7 +113,7 @@ void f2_f5(const ki key, const rand rand, const opc opc, xres res, ak ak) {
 
     // res = f2 = OUT2[64] ... OUT2[127]
     // ak = f5 = OUT2[0] ... OUT2[47]
-    memcpy(res, out + sizeof(milenge::ak), sizeof(xres));
+    memcpy(res, out + 8, sizeof(xres));
     memcpy(ak, out, sizeof(milenge::ak));
 }
 

@@ -10,7 +10,7 @@ std::string to_hex_string(const std::span<const uint8_t> buffer) {
     std::stringstream ss;
     ss << std::hex << std::setfill('0');
     for (size_t i = 0; i < buffer.size_bytes(); i++) {
-        ss << std::setw(2) << static_cast<int>(buffer.data()[i]);
+        ss << std::setw(2) << static_cast<int>(buffer[i]);
     }
 
     return ss.str();

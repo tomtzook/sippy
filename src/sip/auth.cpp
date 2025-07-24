@@ -36,7 +36,7 @@ static std::string nc_to_string(const uint32_t nc) {
     return ss.str();
 }
 
-static std::vector<uint8_t> hash_md5_first(
+static std::string hash_md5_first(
     const std::string_view username,
     const std::span<const uint8_t> password,
     const std::string_view realm) {
@@ -47,10 +47,10 @@ static std::vector<uint8_t> hash_md5_first(
     hash.update(":");
     hash.update(password);
 
-    return hash.finalize();
+    return util::to_hex_string(hash.finalize());
 }
 
-static std::vector<uint8_t> hash_md5_second(
+static std::string hash_md5_second(
     const sip::method method,
     const std::string_view uri) {
     std::stringstream ss;
@@ -61,7 +61,7 @@ static std::vector<uint8_t> hash_md5_second(
     hash.update(":");
     hash.update(uri);
 
-    return hash.finalize();
+    return util::to_hex_string(hash.finalize());
 }
 
 void sim_keys_to_password(const ki ki, const opc opc, const amf amf, const std::string_view nonce, res out) {
@@ -101,7 +101,7 @@ std::string auth_md5(
     auto a2 = hash_md5_second(method, uri);
 
     util::hash_md5 hash;
-    hash.update(util::to_hex_string(a1));
+    hash.update(a1);
     hash.update(":");
     hash.update(nonce);
     hash.update(":");
@@ -111,7 +111,7 @@ std::string auth_md5(
     hash.update(":");
     hash.update(qop);
     hash.update(":");
-    hash.update(util::to_hex_string(a2));
+    hash.update(a2);
 
     auto resp = hash.finalize();
     return util::to_hex_string(resp);
