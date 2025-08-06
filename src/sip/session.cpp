@@ -46,6 +46,67 @@ static std::optional<std::string> get_branch(const message_ptr& msg, const conne
     return std::nullopt;
 }
 
+transaction::transaction(
+    channel_ptr channel,
+    const std::string_view branch,
+    const dialog_info& info,
+    message_ptr&& original_request,
+    response_callback&& callback)
+    : m_channel(std::move(channel))
+    , m_info{.dialog = info, .branch = std::string(branch)}
+    , m_original_request(std::move(original_request))
+    , m_callback(std::move(callback))
+{}
+
+void transaction::respond(const status_code code, header_container&& additional_headers) {
+    auto message = create_response(
+        code,
+        *m_original_request,
+        1800,
+        70
+    );
+    message->add_headers(std::move(additional_headers));
+    send(std::move(message));
+}
+
+void transaction::respond(const status_code code) {
+    auto message = create_response(
+        code,
+        *m_original_request,
+        1800,
+        70
+    );
+    send(std::move(message));
+}
+
+void transaction::send(message_ptr&& message) {
+    auto& from = message->header<headers::from>();
+    from.tag = message->is_request() ? m_info.dialog.local_tag : m_info.dialog.remote_tag;
+
+    auto& to = message->header<headers::to>();
+    to.tag = message->is_request() ? m_info.dialog.remote_tag : m_info.dialog.local_tag;
+
+    {
+        headers::via via;
+        via.version = version::version_2_0;
+        via.transport = m_info.dialog.session.transport;
+        via.host = m_info.dialog.session.conn_info.local_address;
+        via.port = m_info.dialog.session.conn_info.local_port;
+        via.tags["branch"] = m_info.branch;
+        message->add_header(std::move(via));
+    }
+    {
+        headers::contact contact;
+        contact.uri = std::format("sip:{}:{};transport={}",
+            m_info.dialog.session.conn_info.local_address,
+            m_info.dialog.session.conn_info.local_port,
+            transport_str(m_info.dialog.session.transport));
+        message->add_header(std::move(contact));
+    }
+
+    m_channel->send(std::move(message));
+}
+
 dialog::dialog(channel_ptr channel, const std::string_view tag, const session_info& info)
     : m_channel(std::move(channel))
     , m_info{.session = info, .local_tag = std::string(tag)}
@@ -142,7 +203,7 @@ void dialog::request(message_ptr&& message, response_callback&& callback) {
         throw std::runtime_error("message is either not valid or not a request");
     }
 
-    const auto& transaction = create_transaction(std::move(callback));
+    const auto transaction = create_transaction(nullptr, std::move(callback));
 
     const auto seq_num = next_sequence_number();
     if (message->has_header<headers::cseq>()) {
@@ -156,25 +217,7 @@ void dialog::request(message_ptr&& message, response_callback&& callback) {
         message->add_header(cseq);
     }
 
-    send(transaction, std::move(message));
-}
-
-void dialog::respond(const status_code code, message_ptr&& original_request) {
-    if (!original_request->is_request()) {
-        throw std::runtime_error("original request message is not a request");
-    }
-
-    // todo: retain transaction for future response
-    const auto& transaction = create_transaction();
-
-    auto message = create_response(
-        code,
-        *original_request,
-        1800,
-        70
-    );
-
-    send(transaction, std::move(message));
+    transaction->send(std::move(message));
 }
 
 message_ptr dialog::_create_request_register(
@@ -241,32 +284,11 @@ message_ptr dialog::_create_request_bye(
     );
 }
 
-void dialog::send(const transaction& transaction, message_ptr&& message) {
-    auto& from = message->header<headers::from>();
-    from.tag = message->is_request() ? m_info.local_tag : m_info.remote_tag;
+void dialog::on_new_request(message_ptr&& message, const listen_callback& callback) {
+    try_assign_remote_tag(message);
 
-    auto& to = message->header<headers::to>();
-    to.tag = message->is_request() ? m_info.remote_tag : m_info.local_tag;
-
-    {
-        headers::via via;
-        via.version = version::version_2_0;
-        via.transport = transaction.info.dialog.session.transport;
-        via.host = transaction.info.dialog.session.conn_info.local_address;
-        via.port = transaction.info.dialog.session.conn_info.local_port;
-        via.tags["branch"] = transaction.info.branch;
-        message->add_header(std::move(via));
-    }
-    {
-        headers::contact contact;
-        contact.uri = std::format("sip:{}:{};transport={}",
-            transaction.info.dialog.session.conn_info.local_address,
-            transaction.info.dialog.session.conn_info.local_port,
-            "TCP"); // m_info.session.transport
-        message->add_header(std::move(contact));
-    }
-
-    m_channel->send(std::move(message));
+    const auto transaction = create_transaction(std::move(message), nullptr);
+    callback(transaction, transaction->m_original_request);
 }
 
 void dialog::on_new_message(message_ptr&& message, const std::optional<std::string>& branch) {
@@ -284,8 +306,8 @@ void dialog::on_new_message(message_ptr&& message, const std::optional<std::stri
         auto it = m_transactions.find(branch.value());
         if (it != m_transactions.end()) {
             auto done = false;
-            if (it->second.callback != nullptr) {
-                done = it->second.callback(*this, std::move(message));
+            if (it->second->m_callback != nullptr) {
+                done = it->second->m_callback(*this, std::move(message));
             } else {
                 done = true;
             }
@@ -305,9 +327,9 @@ void dialog::try_assign_remote_tag(const message_ptr& message) {
     m_info.remote_tag = get_remote_tag(message);
 }
 
-const transaction& dialog::create_transaction(response_callback&& callback) {
+transaction_ptr dialog::create_transaction(message_ptr&& message, response_callback&& callback) {
     auto branch = generate_branch();
-    transaction new_transaction({m_info, branch}, callback);
+    auto new_transaction = std::make_shared<transaction>(m_channel, branch, m_info, std::move(message), std::move(callback));
     auto [it, inserted] = m_transactions.emplace(branch, std::move(new_transaction));
     if (!inserted) {
         throw std::runtime_error("transaction already exists");
@@ -381,14 +403,14 @@ void session::on_new_message(message_ptr&& message) {
         auto it = m_listeners.find(message->request_line().method);
         if (it != m_listeners.end()) {
             const auto new_dialog = create_dialog();
-            new_dialog->try_assign_remote_tag(message);
-            it->second(new_dialog, std::move(message));
-            return;
+            new_dialog->on_new_request(std::move(message), it->second);
         } else {
             // we have no listeners for this message
             const auto new_dialog = create_dialog();
             new_dialog->try_assign_remote_tag(message);
-            new_dialog->respond(status_code::rejected, std::move(message));
+            new_dialog
+                ->create_transaction(std::move(message), nullptr)
+                ->respond(status_code::service_unavailable);
         }
     } else {
         // response to us without a dialog
