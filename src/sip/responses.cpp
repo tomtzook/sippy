@@ -3,7 +3,7 @@
 
 namespace sippy::sip {
 
-message_ptr create_request(
+message_ptr create_response(
     const sip::status_code code,
     const sip::message& original_request,
     const uint32_t expires,
@@ -27,12 +27,12 @@ message_ptr create_request(
     msg->copy_headers<headers::cseq>(original_request);
 
     {
-        headers::expires expires_h;
+        headers::expires expires_h{};
         expires_h.value = expires;
         msg->add_header(std::move(expires_h));
     }
     {
-        headers::max_forwards max_forwards_h;
+        headers::max_forwards max_forwards_h{};
         max_forwards_h.value = max_forwards;
         msg->add_header(std::move(max_forwards_h));
     }

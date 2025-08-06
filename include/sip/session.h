@@ -19,7 +19,8 @@ struct session_info {
 
 struct dialog_info {
     const session_info& session;
-    std::string tag;
+    std::string local_tag;
+    std::optional<std::string> remote_tag;
 };
 
 struct transaction_info {
@@ -44,7 +45,41 @@ public:
         std::string_view target_uri,
         std::string_view from_uri,
         sip::headers::authorization&& auth_header,
+        response_callback&& callback,
+        header_container&& additional_headers);
+    void request_register(
+        std::string_view target_uri,
+        std::string_view from_uri,
+        sip::headers::authorization&& auth_header,
         response_callback&& callback);
+    void request_invite(
+        std::string_view from_uri,
+        std::string_view to_uri,
+        std::string_view call_id,
+        response_callback&& callback,
+        header_container&& additional_headers);
+    void request_invite(
+        std::string_view from_uri,
+        std::string_view to_uri,
+        std::string_view call_id,
+        response_callback&& callback);
+    void request_ack(
+        std::string_view from_uri,
+        std::string_view to_uri,
+        std::string_view call_id,
+        response_callback&& callback,
+        header_container&& additional_headers);
+    void request_ack(
+        std::string_view from_uri,
+        std::string_view to_uri,
+        std::string_view call_id,
+        response_callback&& callback);
+    void request_bye(
+        std::string_view from_uri,
+        std::string_view to_uri,
+        std::string_view call_id,
+        response_callback&& callback,
+        header_container&& additional_headers);
     void request_bye(
         std::string_view from_uri,
         std::string_view to_uri,
@@ -52,10 +87,31 @@ public:
         response_callback&& callback);
 
     void request(message_ptr&& message, response_callback&& callback);
+    void respond(status_code code, message_ptr&& original_request);
 
 private:
+    message_ptr _create_request_register(
+        std::string_view target_uri,
+        std::string_view from_uri,
+        sip::headers::authorization&& auth_header);
+    message_ptr _create_request_invite(
+        std::string_view from_uri,
+        std::string_view to_uri,
+        std::string_view call_id);
+    message_ptr _create_request_ack(
+        std::string_view from_uri,
+        std::string_view to_uri,
+        std::string_view call_id);
+    message_ptr _create_request_bye(
+        std::string_view from_uri,
+        std::string_view to_uri,
+        std::string_view call_id);
+
     void send(const transaction& transaction, message_ptr&& message);
     void on_new_message(message_ptr&& message, const std::optional<std::string>& branch);
+    void try_assign_remote_tag(const message_ptr& message);
+
+    const transaction& create_transaction(response_callback&& callback = nullptr);
     uint32_t next_sequence_number();
 
     channel_ptr m_channel;
@@ -69,7 +125,7 @@ private:
 
 class session {
 public:
-    using listen_callback = std::function<void(dialog_ptr, message_ptr&&)>;
+    using listen_callback = std::function<void(const dialog_ptr&, message_ptr&&)>;
     using open_callback = std::function<void(session&, uint64_t)>;
     using error_callback = std::function<void(uint64_t)>;
 

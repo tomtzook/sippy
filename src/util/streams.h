@@ -41,10 +41,19 @@ public:
     pos_type seekoff(const off_type off, const std::ios_base::seekdir dir, std::ios_base::openmode) override {
         if (dir == std::ios_base::cur) {
             pbump(static_cast<int>(off));
+        } else if (dir == std::ios_base::beg) {
+            setp(pbase(), epptr());
+            pbump(static_cast<int>(off));
         } else {
             return pos_type(-1);
         }
 
+        return pptr() - pbase();
+    }
+
+    pos_type seekpos(const pos_type pos, std::ios_base::openmode) override {
+        setp(pbase(), epptr());
+        pbump(static_cast<int>(pos));
         return pptr() - pbase();
     }
 };

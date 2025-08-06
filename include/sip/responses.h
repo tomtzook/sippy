@@ -4,7 +4,7 @@
 
 namespace sippy::sip {
 
-message_ptr create_request(
+message_ptr create_response(
     sip::status_code code,
     const sip::message& original_request,
     uint32_t expires,

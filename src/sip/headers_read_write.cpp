@@ -122,7 +122,7 @@ DEFINE_SIP_HEADER_READ(contact) {
     serialization::reader reader(is);
     {
         auto str = reader.read_until(serialization::is_semicolon);
-        const auto match = parse(str, R"(^(?:(\"?.+\"?)\s+)?<?(\w+:[\d\w@\-\.\+]+)>?\s*$)");
+        const auto match = parse(str, R"(^(?:(\"?.+\"?)\s+)?<?(\w+:[\d\w@\-\.\+:]+)>?\s*$)");
         if (match[1].matched) {
             h.display_name = match[1].str();
         } else {
@@ -267,8 +267,8 @@ DEFINE_SIP_HEADER_WRITE(route) {
 
 DEFINE_SIP_HEADER_READ(record_route) {
     serialization::reader reader(is);
-    auto str = reader.read_until(serialization::is_semicolon);
-    const auto match = parse(str, R"(^<(.+)>$)");
+    auto str = reader.read_until(serialization::is_new_line);
+    const auto match = parse(str, R"(^<(.+)(?:;[\w\d./=]+)?>)");
     h.uri = match[1].str();
 }
 

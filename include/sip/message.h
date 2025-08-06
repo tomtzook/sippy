@@ -44,7 +44,52 @@ message_ptr parse(std::span<const uint8_t> buffer);
 void write(std::ostream& os, message_ptr message);
 ssize_t write(std::span<uint8_t> buffer, message_ptr message);
 
-class message {
+class header_container {
+public:
+    header_container() = default;
+    header_container(const header_container&) = delete;
+    header_container(header_container&&) = default;
+    ~header_container() = default;
+
+    template<headers::meta::_header_type T>
+    [[nodiscard]] bool has_header() const;
+    template<headers::meta::_header_type T>
+    [[nodiscard]] size_t header_count() const;
+    template<headers::meta::_header_type T>
+    const T& header(size_t index = 0) const;
+    template<headers::meta::_header_type T>
+    T& header(size_t index = 0);
+
+    template<headers::meta::_header_type T>
+    void add_header(const T& header);
+    template<headers::meta::_header_type T>
+    void add_header(T&& header);
+    template<headers::meta::_header_type T>
+    void copy_headers(const header_container& other);
+    template<headers::meta::_header_type T>
+    bool remove_header(size_t index = 0);
+    template<headers::meta::_header_type T>
+    bool remove_headers();
+
+    void add_headers(header_container&& other);
+
+protected:
+    [[nodiscard]] size_t _header_count(const std::string& name) const;
+    [[nodiscard]] const headers::storage::_base_header_holder* _get_header(const std::string& name, size_t index) const;
+    headers::storage::_base_header_holder* _get_header(const std::string& name, size_t index);
+    void _add_header(const std::string& name, headers::storage::_header_holder_ptr holder);
+    void _copy_headers(const std::string& name, const header_container& other);
+    bool _remove_header(const std::string& name, size_t index);
+    bool _remove_headers(const std::string& name);
+
+private:
+    std::map<std::string, std::vector<headers::storage::_header_holder_ptr>> m_headers;
+
+    friend class reader;
+    friend class writer;
+};
+
+class message : public header_container {
 public:
     message() = default;
     message(const message&) = delete;
@@ -66,26 +111,6 @@ public:
     void set_status_line(const sip::status_line& line);
     void set_status_line(sip::status_line&& line);
 
-    template<headers::meta::_header_type T>
-    [[nodiscard]] bool has_header() const;
-    template<headers::meta::_header_type T>
-    [[nodiscard]] size_t header_count() const;
-    template<headers::meta::_header_type T>
-    const T& header(size_t index = 0) const;
-    template<headers::meta::_header_type T>
-    T& header(size_t index = 0);
-
-    template<headers::meta::_header_type T>
-    void add_header(const T& header);
-    template<headers::meta::_header_type T>
-    void add_header(T&& header);
-    template<headers::meta::_header_type T>
-    void copy_headers(const message& other);
-    template<headers::meta::_header_type T>
-    bool remove_header(size_t index = 0);
-    template<headers::meta::_header_type T>
-    bool remove_headers();
-
     template<bodies::meta::_body_type T>
     [[nodiscard]] bool is_body() const;
     template<bodies::meta::_body_type T>
@@ -100,14 +125,6 @@ public:
     void remove_body();
 
 private:
-    [[nodiscard]] size_t _header_count(const std::string& name) const;
-    [[nodiscard]] const headers::storage::_base_header_holder* _get_header(const std::string& name, size_t index) const;
-    headers::storage::_base_header_holder* _get_header(const std::string& name, size_t index);
-    void _add_header(const std::string& name, headers::storage::_header_holder_ptr holder);
-    void _copy_headers(const std::string& name, const message& other);
-    bool _remove_header(const std::string& name, size_t index);
-    bool _remove_headers(const std::string& name);
-
     [[nodiscard]] bool _is_body(const std::string& type) const;
     [[nodiscard]] const bodies::storage::_base_body_holder* _get_body(const std::string& type) const;
     [[nodiscard]] bodies::storage::_base_body_holder* _get_body(const std::string& type);
@@ -115,7 +132,6 @@ private:
 
     std::optional<sip::request_line> m_request_line;
     std::optional<sip::status_line> m_status_line;
-    std::map<std::string, std::vector<headers::storage::_header_holder_ptr>> m_headers;
     bodies::storage::_body_holder_ptr m_body;
 
     friend class reader;
@@ -123,18 +139,18 @@ private:
 };
 
 template<headers::meta::_header_type T>
-bool message::has_header() const {
+bool header_container::has_header() const {
     return header_count<T>() > 0;
 }
 
 template<headers::meta::_header_type T>
-size_t message::header_count() const {
+size_t header_container::header_count() const {
     const auto& name = headers::meta::_header_detail<T>::name();
     return _header_count(name);
 }
 
 template<headers::meta::_header_type T>
-const T& message::header(size_t index) const {
+const T& header_container::header(size_t index) const {
     const auto& name = headers::meta::_header_detail<T>::name();
 
     auto holder = reinterpret_cast<const headers::storage::_header_holder<T>*>(_get_header(name, index));
@@ -142,7 +158,7 @@ const T& message::header(size_t index) const {
 }
 
 template<headers::meta::_header_type T>
-T& message::header(size_t index) {
+T& header_container::header(size_t index) {
     const auto& name = headers::meta::_header_detail<T>::name();
 
     auto holder = reinterpret_cast<headers::storage::_header_holder<T>*>(_get_header(name, index));
@@ -150,13 +166,13 @@ T& message::header(size_t index) {
 }
 
 template<headers::meta::_header_type T>
-void message::add_header(const T& header) {
+void header_container::add_header(const T& header) {
     T header_copy = header;
     add_header(std::move(header_copy));
 }
 
 template<headers::meta::_header_type T>
-void message::add_header(T&& header) {
+void header_container::add_header(T&& header) {
     const auto& name = headers::meta::_header_detail<T>::name();
 
     auto holder = std::make_unique<headers::storage::_header_holder<T>>();
@@ -166,19 +182,19 @@ void message::add_header(T&& header) {
 }
 
 template<headers::meta::_header_type T>
-void message::copy_headers(const message& other) {
+void header_container::copy_headers(const header_container& other) {
     const auto& name = headers::meta::_header_detail<T>::name();
     _copy_headers(name, other);
 }
 
 template<headers::meta::_header_type T>
-bool message::remove_header(size_t index) {
+bool header_container::remove_header(size_t index) {
     const auto& name = headers::meta::_header_detail<T>::name();
     return _remove_header(name, index);
 }
 
 template<headers::meta::_header_type T>
-bool message::remove_headers() {
+bool header_container::remove_headers() {
     const auto& name = headers::meta::_header_detail<T>::name();
     return _remove_headers(name);
 }

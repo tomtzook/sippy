@@ -67,8 +67,7 @@ private:
 
 class tcp_transport final : public transport_container {
 public:
-    tcp_transport();
-    ~tcp_transport() override;
+    explicit tcp_transport(looper::loop loop);
 
     [[nodiscard]] transport type() const override;
 

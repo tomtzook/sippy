@@ -1,6 +1,4 @@
 
-#include <looper.h>
-
 #include <sip/transport.h>
 
 namespace sippy::sip {
@@ -38,8 +36,12 @@ void tcp_channel::start_read() {
 }
 
 void tcp_channel::send(message_ptr&& message) {
-    uint8_t buffer[1024] = {};
+    uint8_t buffer[4096] = {};
     const auto written = write({buffer, sizeof(buffer)}, std::move(message));
+    if (written < 0) {
+        throw std::runtime_error("write size peek failed");
+    }
+
     looper::write_tcp(m_tcp, {buffer, static_cast<size_t>(written)}, [this](looper::loop, looper::handle, const looper::error error)-> void {
         if (error != 0) {
             m_error_callback(error);
@@ -47,13 +49,8 @@ void tcp_channel::send(message_ptr&& message) {
     });
 }
 
-tcp_transport::tcp_transport()
-    : m_loop(looper::create()) {
-    looper::exec_in_thread(m_loop);
-}
-
-tcp_transport::~tcp_transport() {
-    looper::destroy(m_loop);
+tcp_transport::tcp_transport(const looper::loop loop)
+    : m_loop(loop) {
 }
 
 transport tcp_transport::type() const {

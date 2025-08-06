@@ -130,7 +130,113 @@ ssize_t write(const std::span<uint8_t> buffer, message_ptr message) {
     std::ostream os(&buff);
     write(os, std::move(message));
 
+    if (os.bad()) {
+        throw std::runtime_error("write failed: bad");
+    }
+    if (os.fail()) {
+        throw std::runtime_error("write failed: fail");
+    }
+    if (os.eof()) {
+        throw std::runtime_error("write failed: eof");
+    }
+
     return os.tellp();
+}
+
+void header_container::add_headers(header_container&& other) {
+    for (auto& [name, holder] : other.m_headers) {
+        for (auto& header : holder) {
+            _add_header(name, std::move(header));
+        }
+    }
+}
+
+size_t header_container::_header_count(const std::string& name) const {
+    const auto it = m_headers.find(name);
+    if (it != m_headers.end()) {
+        return it->second.size();
+    }
+
+    return 0;
+}
+
+const headers::storage::_base_header_holder* header_container::_get_header(const std::string& name, const size_t index) const {
+    const auto it = m_headers.find(name);
+    if (it == m_headers.end()) {
+        throw headers::header_not_found();
+    }
+    if (it->second.empty()) {
+        throw headers::header_not_found();
+    }
+    if (index >= it->second.size()) {
+        throw headers::header_not_found();
+    }
+
+    return it->second[index].get();
+}
+
+headers::storage::_base_header_holder* header_container::_get_header(const std::string& name, const size_t index) {
+    const auto it = m_headers.find(name);
+    if (it == m_headers.end()) {
+        throw headers::header_not_found();
+    }
+    if (it->second.empty()) {
+        throw headers::header_not_found();
+    }
+    if (index >= it->second.size()) {
+        throw headers::header_not_found();
+    }
+
+    return it->second[index].get();
+}
+
+void header_container::_add_header(const std::string& name, headers::storage::_header_holder_ptr holder) {
+    const auto it = m_headers.find(name);
+    if (it == m_headers.end()) {
+        std::vector<headers::storage::_header_holder_ptr> vector;
+        vector.push_back(std::move(holder));
+        m_headers[name] = std::move(vector);
+    } else {
+        it->second.push_back(std::move(holder));
+    }
+}
+
+void header_container::_copy_headers(const std::string& name, const header_container& other) {
+    const auto it = other.m_headers.find(name);
+    if (it != other.m_headers.end()) {
+        for (const auto& holder : it->second) {
+            _add_header(name, holder->copy());
+        }
+    }
+}
+
+bool header_container::_remove_header(const std::string& name, const size_t index) {
+    const auto it = m_headers.find(name);
+    if (it == m_headers.end()) {
+        return false;
+    }
+    if (it->second.empty()) {
+        return false;
+    }
+    if (index >= it->second.size()) {
+        return false;
+    }
+
+    it->second.erase(it->second.begin() + static_cast<ptrdiff_t>(index));
+    return true;
+}
+
+bool header_container::_remove_headers(const std::string& name) {
+    const auto it = m_headers.find(name);
+    if (it == m_headers.end()) {
+        return false;
+    }
+    if (it->second.empty()) {
+        return false;
+    }
+
+    it->second.clear();
+    return true;
 }
 
 bool message::is_valid() const {
@@ -201,96 +307,8 @@ void message::set_status_line(sip::status_line&& line) {
     m_request_line = std::nullopt;
 }
 
-size_t message::_header_count(const std::string& name) const {
-    const auto it = m_headers.find(name);
-    if (it != m_headers.end()) {
-        return it->second.size();
-    }
-
-    return 0;
-}
-
 void message::remove_body() {
     m_body.reset();
-}
-
-const headers::storage::_base_header_holder* message::_get_header(const std::string& name, size_t index) const {
-    const auto it = m_headers.find(name);
-    if (it == m_headers.end()) {
-        throw headers::header_not_found();
-    }
-    if (it->second.empty()) {
-        throw headers::header_not_found();
-    }
-    if (index >= it->second.size()) {
-        throw headers::header_not_found();
-    }
-
-    return it->second[index].get();
-}
-
-headers::storage::_base_header_holder* message::_get_header(const std::string& name, const size_t index) {
-    const auto it = m_headers.find(name);
-    if (it == m_headers.end()) {
-        throw headers::header_not_found();
-    }
-    if (it->second.empty()) {
-        throw headers::header_not_found();
-    }
-    if (index >= it->second.size()) {
-        throw headers::header_not_found();
-    }
-
-    return it->second[index].get();
-}
-
-void message::_add_header(const std::string& name, headers::storage::_header_holder_ptr holder) {
-    const auto it = m_headers.find(name);
-    if (it == m_headers.end()) {
-        std::vector<headers::storage::_header_holder_ptr> vector;
-        vector.push_back(std::move(holder));
-        m_headers[name] = std::move(vector);
-    } else {
-        it->second.push_back(std::move(holder));
-    }
-}
-
-void message::_copy_headers(const std::string& name, const message& other) {
-    const auto it = other.m_headers.find(name);
-    if (it != other.m_headers.end()) {
-        for (const auto& holder : it->second) {
-            _add_header(name, holder->copy());
-        }
-    }
-}
-
-bool message::_remove_header(const std::string& name, const size_t index) {
-    const auto it = m_headers.find(name);
-    if (it == m_headers.end()) {
-        return false;
-    }
-    if (it->second.empty()) {
-        return false;
-    }
-    if (index >= it->second.size()) {
-        return false;
-    }
-
-    it->second.erase(it->second.begin() + static_cast<ptrdiff_t>(index));
-    return true;
-}
-
-bool message::_remove_headers(const std::string& name) {
-    const auto it = m_headers.find(name);
-    if (it == m_headers.end()) {
-        return false;
-    }
-    if (it->second.empty()) {
-        return false;
-    }
-
-    it->second.clear();
-    return true;
 }
 
 bool message::_is_body(const std::string& type) const {
