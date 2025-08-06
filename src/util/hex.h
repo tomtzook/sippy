@@ -10,4 +10,6 @@ namespace sippy::util {
 std::string to_hex_string(std::span<const uint8_t> buffer);
 std::vector<uint8_t> from_hex_string(std::string_view str);
 
+std::string random_hex_string(size_t length);
+
 }

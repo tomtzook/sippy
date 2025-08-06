@@ -64,6 +64,21 @@ static std::string hash_md5_second(
     return util::to_hex_string(hash.finalize());
 }
 
+void ki_from_hex(const std::string_view str, ki ki) {
+    auto kib = util::from_hex_string(str);
+    memcpy(ki, kib.data(), kib.size());
+}
+
+void opc_from_hex(const std::string_view str, opc opc) {
+    auto opcb = util::from_hex_string(str);
+    memcpy(opc, opcb.data(), opcb.size());
+}
+
+void amf_from_hex(const std::string_view str, amf amf) {
+    auto amfb = util::from_hex_string(str);
+    memcpy(amf, amfb.data(), amfb.size());
+}
+
 void sim_keys_to_password(const ki ki, const opc opc, const amf amf, const std::string_view nonce, res out) {
     const auto nonce_decoded = util::base64_decode(nonce);
     const auto* nonce_part = reinterpret_cast<const nonce_data*>(nonce_decoded.data());
@@ -87,7 +102,7 @@ void sim_keys_to_password(const ki ki, const opc opc, const amf amf, const std::
     memcpy(out, xres, sizeof(xres));
 }
 
-std::string auth_md5(
+std::string create_auth_response_md5(
     const std::string_view username,
     const std::span<const uint8_t> password,
     const sip::method method,
@@ -97,8 +112,8 @@ std::string auth_md5(
     const std::string_view cnonce,
     const uint32_t nc,
     const std::string_view qop) {
-    auto a1 = hash_md5_first(username, password, realm);
-    auto a2 = hash_md5_second(method, uri);
+    const auto a1 = hash_md5_first(username, password, realm);
+    const auto a2 = hash_md5_second(method, uri);
 
     util::hash_md5 hash;
     hash.update(a1);
@@ -117,7 +132,7 @@ std::string auth_md5(
     return util::to_hex_string(resp);
 }
 
-std::string auth_aka(
+std::string create_auth_response_aka(
     const std::string_view username,
     const ki ki,
     const opc opc,
@@ -132,7 +147,46 @@ std::string auth_aka(
     res password;
     sim_keys_to_password(ki, opc, amf, nonce, password);
 
-    return auth_md5(username, password, method, realm, uri, nonce, cnonce, nc, qop);
+    return create_auth_response_md5(username, password, method, realm, uri, nonce, cnonce, nc, qop);
+}
+
+std::string create_auth_response_md5_for_register(
+    const std::string_view username,
+    const std::string_view uri,
+    const std::span<const uint8_t> password,
+    const headers::www_authorization& auth_header,
+    const std::string_view cnonce,
+    const uint32_t nc) {
+    return create_auth_response_md5(
+        username, password,
+        method::register_,
+        auth_header.realm,
+        uri,
+        auth_header.nonce,
+        cnonce,
+        nc,
+        auth_header.qop);
+}
+
+std::string create_auth_response_aka_for_register(
+    const std::string_view username,
+    const std::string_view uri,
+    const ki ki,
+    const opc opc,
+    const amf amf,
+    const headers::www_authorization& auth_header,
+    const std::string_view cnonce,
+    const uint32_t nc) {
+    return create_auth_response_aka(
+        username,
+        ki, opc, amf,
+        method::register_,
+        auth_header.realm,
+        uri,
+        auth_header.nonce,
+        cnonce,
+        nc,
+        auth_header.qop);
 }
 
 }

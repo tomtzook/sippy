@@ -3,6 +3,8 @@ project(sippy)
 
 set(CMAKE_CXX_STANDARD 20)
 
+find_package(OpenSSL REQUIRED)
+
 add_subdirectory(looper)
 
 add_library(sippy STATIC
@@ -25,10 +27,37 @@ add_library(sippy STATIC
         src/sip/bodies_read_write.cpp
         src/sip/types_storage.cpp
         src/sip/reader.cpp
-        src/sip/writer.cpp)
-target_link_libraries(sippy looper)
+        src/sip/writer.cpp
+        src/util/streams.h
+        include/sip/requests.h
+        src/sip/requests.cpp
+        include/sip/responses.h
+        src/sip/responses.cpp
+        include/sip/auth.h
+        src/sip/auth.cpp
+        src/util/hash.h
+        src/util/hash.cpp
+        src/util/base64.h
+        src/util/base64.cpp
+        src/crypto/milenge.h
+        src/crypto/milenge.cpp
+        src/util/hex.h
+        src/util/hex.cpp
+        include/sip/transport.h
+        client/client.h
+        include/sip/account.h
+        src/sip/account.cpp
+        src/sip/transport.cpp
+        include/sip/session.h
+        src/sip/session.cpp)
+target_link_libraries(sippy PUBLIC looper PRIVATE OpenSSL::SSL OpenSSL::Crypto)
 target_include_directories(sippy
         PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        PRIVATE
+        #PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/src)
+
+add_executable(test test.cpp)
+target_link_libraries(test sippy)
+add_executable(test2 client_test.cpp)
+target_link_libraries(test2 sippy looper)

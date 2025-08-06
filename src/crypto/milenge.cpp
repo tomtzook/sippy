@@ -1,7 +1,6 @@
 
 #include <cstring>
 
-#include "rijndael.h"
 #include "milenge.h"
 
 #include <stdexcept>
@@ -56,9 +55,6 @@ static size_t aes128encrypt(const uint8_t* key, const std::span<const uint8_t> d
 }
 
 void f1(const ki key, const sqn sqn, const rand rand, const opc opc, const amf amf, net_auth mac_a, resync_auth mac_s) {
-    // uint32_t rijndaelEkey[44];
-    // rijndael::key_schedule(key, rijndaelEkey);
-
     uint8_t rijndaelInput[16];
     uint8_t temp[16];
     uint8_t out1[16];
@@ -79,7 +75,6 @@ void f1(const ki key, const sqn sqn, const rand rand, const opc opc, const amf a
     buffer_rotate<sizeof(rijndaelInput)>(in1.data, opc, rijndaelInput);
     buffer_xor<sizeof(rijndaelInput)>(rijndaelInput, temp, rijndaelInput);
 
-    //rijndael::encrypt(rijndaelInput, rijndaelEkey, out1);
     aes128encrypt(key, rijndaelInput, out1);
     buffer_xor<sizeof(out1)>(out1, opc, out1);
 
@@ -90,9 +85,6 @@ void f1(const ki key, const sqn sqn, const rand rand, const opc opc, const amf a
 }
 
 void f2_f5(const ki key, const rand rand, const opc opc, xres res, ak ak) {
-    // uint32_t rijndaelEkey[44];
-    // rijndael::key_schedule(key, rijndaelEkey);
-
     uint8_t rijndaelInput[16];
     uint8_t temp[16];
     uint8_t out[16];
@@ -100,14 +92,12 @@ void f2_f5(const ki key, const rand rand, const opc opc, xres res, ak ak) {
     // TEMP = E_K(RAND XOR OP_C)
     buffer_xor<16>(rand, opc, rijndaelInput);
 
-    //rijndael::encrypt(rijndaelInput, rijndaelEkey, temp);
     aes128encrypt(key, rijndaelInput, temp);
 
     // OUT2 = E_K(rotate(TEMP XOR OP_C, r2) XOR c2) XOR OP_C
     buffer_xor<16>(temp, opc, rijndaelInput);
     rijndaelInput[15] ^= 1;
 
-    //rijndael::encrypt(rijndaelInput, rijndaelEkey, out);
     aes128encrypt(key, rijndaelInput, out);
     buffer_xor<16>(out, opc, out);
 

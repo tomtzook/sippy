@@ -1,10 +1,13 @@
 
 #include <sstream>
 #include <iomanip>
+#include <random>
 
 #include "hex.h"
 
 namespace sippy::util {
+
+const std::string CHARACTERS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
 
 std::string to_hex_string(const std::span<const uint8_t> buffer) {
     std::stringstream ss;
@@ -35,6 +38,20 @@ std::vector<uint8_t> from_hex_string(const std::string_view str) {
     }
 
     return std::move(buffer);
+}
+
+std::string random_hex_string(const size_t length) {
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<> distrib(0, CHARACTERS.size() - 1);
+
+    std::stringstream ss;
+    for (size_t i = 0; i < length; ++i) {
+        const auto ch = CHARACTERS[distrib(gen)];
+        ss << ch;
+    }
+
+    return ss.str();
 }
 
 }
