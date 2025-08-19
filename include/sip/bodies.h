@@ -4,6 +4,7 @@
 #include <memory>
 
 #include <sdp/message.h>
+#include <sdp/description.h>
 
 namespace sippy::sip::bodies {
 
@@ -93,7 +94,7 @@ void register_body() {
     namespace sippy::sip::bodies { \
         struct b_name; \
         std::istream& operator>>(std::istream& is, b_name & b); \
-        std::ostream& operator<<(std::ostream& os, b_name & b); \
+        std::ostream& operator<<(std::ostream& os, const b_name & b); \
         namespace meta { \
             template<> struct _body_detail<sippy::sip::bodies::b_name> { \
                 static constexpr const char* app_type() { return (app_type_str) ; } \
@@ -102,7 +103,7 @@ void register_body() {
                 static void read(std::istream& is, sippy::sip::bodies::b_name & h) { is >> h; } \
             }; \
             template<> struct _body_writer<sippy::sip::bodies::b_name> { \
-                static void write(std::ostream& os, sippy::sip::bodies::b_name & h) { os << h; } \
+                static void write(std::ostream& os, const sippy::sip::bodies::b_name & h) { os << h; } \
             }; \
         } \
     } \
@@ -120,13 +121,13 @@ void register_body() {
 
 #define DEFINE_SIP_BODY_WRITE(b_name) \
     namespace sippy::sip::bodies { \
-        static void write_body_ ##b_name(std::ostream& os, b_name & b); \
-        std::ostream& operator<<(std::ostream& os, b_name & b) { \
+        static void write_body_ ##b_name(std::ostream& os, const b_name & b); \
+        std::ostream& operator<<(std::ostream& os, const b_name & b) { \
             write_body_ ##b_name(os, b); \
             return os; \
         } \
     } \
-    static void sippy::sip::bodies::write_body_ ##b_name(std::ostream& os, b_name & b)
+    static void sippy::sip::bodies::write_body_ ##b_name(std::ostream& os, const b_name & b)
 
 
 DECLARE_SIP_BODY(test, "application/test") {
@@ -134,5 +135,17 @@ DECLARE_SIP_BODY(test, "application/test") {
 };
 
 DECLARE_SIP_BODY(sdp, "application/sdp") {
-    sippy::sdp::session_description description;
+    sdp() = default;
+
+    explicit sdp(sippy::sdp::description_message&& description)
+        : description(description)
+    {}
+    explicit sdp(sippy::sdp::session_description&& description)
+        : description(description.to_message())
+    {}
+    explicit sdp(const sippy::sdp::session_description& description)
+        : description(description.to_message())
+    {}
+
+    sippy::sdp::description_message description;
 };

@@ -7,7 +7,7 @@ writer::writer(std::ostream& os)
     : m_os(os)
 {}
 
-void writer::write(const session_description& message) {
+void writer::write(const description_message& message) {
     validate_message(message);
 
     write_field(message.version);
@@ -22,8 +22,11 @@ void writer::write(const session_description& message) {
 
     for (const auto& time_desc : message.time_descriptions) {
         write_field(time_desc.times);
-        write_field_vec(time_desc.repeat_times);
-        write_field_opt(time_desc.timezone);
+
+        for (const auto& repeat_desc : time_desc.repeat) {
+            write_field(repeat_desc.repeat);
+            write_field_opt(repeat_desc.timezone);
+        }
     }
 
     write_field_vec(message.attributes);

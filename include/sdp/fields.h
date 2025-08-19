@@ -42,7 +42,7 @@ struct _field_writer {};
 
 }
 
-#define DECLARE_SDP_FIELD(f_name, ch_name, order_int, flags_int) \
+#define DECLARE_SDP_FIELD(f_name, ch_name) \
     namespace sippy::sdp::fields { \
         struct f_name; \
         bool _validate_field_ ##f_name(const f_name & f);\
@@ -51,8 +51,6 @@ struct _field_writer {};
         namespace meta { \
             template<> struct _field_detail<sippy::sdp::fields::f_name> { \
                 static constexpr const char name() { return (ch_name) ; } \
-                static constexpr uint32_t order() { return (order_int) ; } \
-                static constexpr uint32_t flags() { return (flags_int) ; } \
             }; \
             template<> struct _field_validator<sippy::sdp::fields::f_name> { \
                 static bool validate(const sippy::sdp::fields::f_name & f) { return _validate_field_ ##f_name(f); } \
@@ -99,11 +97,11 @@ struct _field_writer {};
 // TODO: ATTRIBUTES
 // TODO: STRING ENCODING AND CHARSETS
 
-DECLARE_SDP_FIELD(version, 'v', 0, flag_none) {
+DECLARE_SDP_FIELD(version, 'v') {
     sdp::version ver;
 };
 
-DECLARE_SDP_FIELD(origin, 'o', 1, flag_none) {
+DECLARE_SDP_FIELD(origin, 'o') {
     std::string username;
     std::string session_id;
     uint64_t session_version;
@@ -112,29 +110,29 @@ DECLARE_SDP_FIELD(origin, 'o', 1, flag_none) {
     std::string unicast_address;
 };
 
-DECLARE_SDP_FIELD(session_name, 's', 2, flag_none) {
+DECLARE_SDP_FIELD(session_name, 's') {
     std::string name;
 };
 
-DECLARE_SDP_FIELD(session_information, 'i', 3, flag_none) {
+DECLARE_SDP_FIELD(session_information, 'i') {
     std::string information;
 };
 
-DECLARE_SDP_FIELD(uri, 'u', 4, flag_optional) {
+DECLARE_SDP_FIELD(uri, 'u') {
     std::string uri_str;
 };
 
-DECLARE_SDP_FIELD(email, 'e', 5, flag_optional) {
+DECLARE_SDP_FIELD(email, 'e') {
     std::optional<std::string> display_name;
     std::string email_address;
 };
 
-DECLARE_SDP_FIELD(phone_number, 'p', 6, flag_optional) {
+DECLARE_SDP_FIELD(phone_number, 'p') {
     std::optional<std::string> display_name;
     std::string number;
 };
 
-DECLARE_SDP_FIELD(connection_information, 'c', 7, flag_allow_multiple) {
+DECLARE_SDP_FIELD(connection_information, 'c') {
     network_type net_type;
     address_type addr_type;
     std::string base_address;
@@ -142,28 +140,27 @@ DECLARE_SDP_FIELD(connection_information, 'c', 7, flag_allow_multiple) {
     std::optional<uint16_t> num_of_addresses;
 };
 
-DECLARE_SDP_FIELD(bandwidth_information, 'b', 8, flag_allow_multiple | flag_optional) {
+DECLARE_SDP_FIELD(bandwidth_information, 'b') {
     std::string bw_type;
     std::string bandwidth;
 };
 
-DECLARE_SDP_FIELD(time_active, 't', 9, flag_allow_multiple) {
+DECLARE_SDP_FIELD(time_active, 't') {
     uint64_t start_time;
     uint64_t stop_time;
 };
 
-DECLARE_SDP_FIELD(repeat_times, 'r', 10, flag_allow_multiple | flag_optional) {
+DECLARE_SDP_FIELD(repeat_times, 'r') {
     uint64_t repeat_interval;
     uint64_t active_duration;
-    uint64_t offset1;
-    uint64_t offset2;
+    std::vector<uint64_t> offsets;
 };
 
-DECLARE_SDP_FIELD(timezone, 'z', 9, flag_allow_multiple | flag_optional) {
+DECLARE_SDP_FIELD(timezone, 'z') {
     std::vector<timezone_adjustment> adjustments; // at least one required
 };
 
-DECLARE_SDP_FIELD(media_description, 'm', 10, flag_allow_multiple) {
+DECLARE_SDP_FIELD(media_description, 'm') {
     sdp::media_type media_type;
     uint16_t port;
     uint64_t number_of_ports;
@@ -171,7 +168,7 @@ DECLARE_SDP_FIELD(media_description, 'm', 10, flag_allow_multiple) {
     std::vector<std::string> formats;
 };
 
-DECLARE_SDP_FIELD(attribute, 'a', 11, flag_allow_multiple) {
+DECLARE_SDP_FIELD(attribute, 'a') {
     std::optional<std::string> name;
     std::string value; // todo: typed/structed values
 };

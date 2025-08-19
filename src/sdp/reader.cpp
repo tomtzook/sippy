@@ -9,8 +9,8 @@ reader::reader(std::istream &is)
     , m_reader(is)
 {}
 
-session_description reader::read() {
-    session_description description{};
+description_message reader::read() {
+    description_message description{};
 
     read(description.version);
     read(description.origin);
@@ -22,15 +22,17 @@ session_description reader::read() {
     read_vector(description.bandwidths);
 
     do {
-        time_description time_description{};
+        media_time_description time_description{};
         read_description(time_description);
+        description.time_descriptions.push_back(std::move(time_description));
     } while (peek<fields::time_active>());
 
     read_vector(description.attributes);
 
     while (peek<fields::media_description>()) {
-        media_description media_description{};
+        message_media_description media_description{};
         read_description(media_description);
+        description.media_descriptions.push_back(std::move(media_description));
     };
 
     validate_message(description);
@@ -38,13 +40,22 @@ session_description reader::read() {
     return description;
 }
 
-void reader::read_description(time_description& description) {
-    read(description.times);
-    read_vector(description.repeat_times);
+void reader::read_description(time_repeat_description& description) {
+    read(description.repeat);
     read_optional(description.timezone);
 }
 
-void reader::read_description(media_description& description) {
+void reader::read_description(media_time_description& description) {
+    read(description.times);
+
+    while (peek<fields::repeat_times>()) {
+        time_repeat_description repeat_description{};
+        read_description(repeat_description);
+        description.repeat.push_back(std::move(repeat_description));
+    };
+}
+
+void reader::read_description(message_media_description& description) {
     read(description.media);
     read_optional(description.information);
     read_vector(description.connections);

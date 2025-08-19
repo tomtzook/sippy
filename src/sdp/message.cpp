@@ -23,7 +23,7 @@ static bool is_valid_vec(const std::vector<T>& vec) {
     return true;
 }
 
-void validate_message(const session_description& message) {
+void validate_message(const description_message& message) {
     if (!fields::meta::_field_validator<fields::version>::validate(message.version)) {
         throw std::invalid_argument("Invalid version field");
     }
@@ -59,11 +59,14 @@ void validate_message(const session_description& message) {
         if (!fields::meta::_field_validator<fields::time_active>::validate(time_desc.times)) {
             throw std::invalid_argument("Invalid times field");
         }
-        if (!is_valid_vec(time_desc.repeat_times)) {
-            throw std::invalid_argument("Invalid repeat field");
-        }
-        if (!is_valid_opt(time_desc.timezone)) {
-            throw std::invalid_argument("Invalid timezone field");
+
+        for (const auto& repeat_desc : time_desc.repeat) {
+            if (!fields::meta::_field_validator<fields::repeat_times>::validate(repeat_desc.repeat)) {
+                throw std::invalid_argument("Invalid repeat field");
+            }
+            if (!is_valid_opt(repeat_desc.timezone)) {
+                throw std::invalid_argument("Invalid timezone field");
+            }
         }
     }
 
@@ -86,23 +89,23 @@ void validate_message(const session_description& message) {
     }
 }
 
-session_description parse(std::istream& is) {
+description_message parse(std::istream& is) {
     reader reader(is);
     return reader.read();
 }
 
-session_description parse(const std::span<const uint8_t> buffer) {
+description_message parse(const std::span<const uint8_t> buffer) {
     util::istream_buff buff(buffer);
     std::istream is(&buff);
     return parse(is);
 }
 
-void write(std::ostream& os, const session_description& message) {
+void write(std::ostream& os, const description_message& message) {
     writer writer(os);
     writer.write(message);
 }
 
-ssize_t write(const std::span<uint8_t> buffer, const session_description& message) {
+ssize_t write(const std::span<uint8_t> buffer, const description_message& message) {
     util::ostream_buff buff(buffer);
     std::ostream os(&buff);
     write(os, message);

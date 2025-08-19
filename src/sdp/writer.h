@@ -8,7 +8,7 @@ class writer {
 public:
     explicit writer(std::ostream& os);
 
-    void write(const session_description& message);
+    void write(const description_message& message);
 
 private:
     template<typename T>

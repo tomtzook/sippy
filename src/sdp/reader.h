@@ -9,7 +9,7 @@ namespace sippy::sdp {
 class reader {
 public:
     explicit reader(std::istream& is);
-    session_description read();
+    description_message read();
 
 private:
     template<typename T>
@@ -59,8 +59,9 @@ private:
         } while (read);
     }
 
-    void read_description(time_description& description);
-    void read_description(media_description& description);
+    void read_description(time_repeat_description& description);
+    void read_description(media_time_description& description);
+    void read_description(message_media_description& description);
 
     std::istream& m_is;
     serialization::reader m_reader;

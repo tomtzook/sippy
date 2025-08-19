@@ -331,20 +331,22 @@ DEFINE_SDP_FIELD_READ(repeat_times) {
     is >> f.repeat_interval;
     reader.eat(' ');
     is >> f.active_duration;
-    reader.eat(' ');
-    is >> f.offset1;
-    reader.eat(' ');
-    is >> f.offset2;
+
+    while (reader.eat_one_if(serialization::is_whitespace)) {
+        uint64_t offset;
+        is >> offset;
+        f.offsets.push_back(offset);
+    }
 }
 
 DEFINE_SDP_FIELD_WRITE(repeat_times) {
     os << f.repeat_interval;
     os << ' ';
     os << f.active_duration;
-    os << ' ';
-    os << f.offset1;
-    os << ' ';
-    os << f.offset2;
+
+    for (const auto& offset : f.offsets) {
+        os << ' ' << offset;
+    }
 }
 
 DEFINE_SDP_FIELD_VALIDATOR(timezone) {
