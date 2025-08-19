@@ -69,6 +69,7 @@ void __attribute__((constructor)) register_known_types() {
     headers::register_header<headers::www_authorization>();
 
     bodies::register_body<bodies::test>();
+    bodies::register_body<bodies::sdp>();
 }
 
 }

@@ -143,9 +143,11 @@ void dialog::request_invite(
     const std::string_view to_uri,
     const std::string_view call_id,
     response_callback&& callback,
-    header_container&& additional_headers) {
+    header_container&& additional_headers,
+    bodies::sdp&& body) {
     auto msg = _create_request_invite(from_uri, to_uri, call_id);
     msg->add_headers(std::move(additional_headers));
+    msg->set_body(std::move(body));
     return request(std::move(msg), std::move(callback));
 }
 

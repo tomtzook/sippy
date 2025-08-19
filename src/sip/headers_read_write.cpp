@@ -46,21 +46,11 @@ static void write_tags(std::ostream& os, const std::map<std::string, std::string
     }
 }
 
-static std::smatch parse(const std::string& data, const std::string_view pattern) {
-    std::regex regex(pattern.data());
-    std::smatch matches;
-    if (std::regex_match(data, matches, regex)) {
-        return matches;
-    } else {
-        throw std::invalid_argument("header data not matching pattern");
-    }
-}
-
 DEFINE_SIP_HEADER_READ(from) {
     serialization::reader reader(is);
     auto str = reader.read_until(serialization::is_new_line);
 
-    const auto match = parse(str, R"(^(?:(\"?.+\"?)\s+)?<?(\w+:[\w@\-\.\+]+)>?\s*(?:;\s*tag=(.+))?$)");
+    const auto match = serialization::parse(str, R"(^(?:(\"?.+\"?)\s+)?<?(\w+:[\w@\-\.\+]+)>?\s*(?:;\s*tag=(.+))?$)");
     if (match[1].matched) {
         h.display_name = match[1].str();
     } else {
@@ -91,7 +81,7 @@ DEFINE_SIP_HEADER_READ(to) {
     serialization::reader reader(is);
     auto str = reader.read_until(serialization::is_new_line);
 
-    const auto match = parse(str, R"(^(?:(\"?.+\"?)\s+)?<?(\w+:[\w@\-\.\+]+)>?\s*(?:;\s*tag=(.+))?$)");
+    const auto match = serialization::parse(str, R"(^(?:(\"?.+\"?)\s+)?<?(\w+:[\w@\-\.\+]+)>?\s*(?:;\s*tag=(.+))?$)");
     if (match[1].matched) {
         h.display_name = match[1].str();
     } else {
@@ -122,7 +112,7 @@ DEFINE_SIP_HEADER_READ(contact) {
     serialization::reader reader(is);
     {
         auto str = reader.read_until(serialization::is_semicolon);
-        const auto match = parse(str, R"(^(?:(\"?.+\"?)\s+)?<?(\w+:[\d\w@\-\.\+:]+)>?\s*$)");
+        const auto match = serialization::parse(str, R"(^(?:(\"?.+\"?)\s+)?<?(\w+:[\d\w@\-\.\+:]+)>?\s*$)");
         if (match[1].matched) {
             h.display_name = match[1].str();
         } else {
@@ -257,7 +247,7 @@ DEFINE_SIP_HEADER_WRITE(expires) {
 DEFINE_SIP_HEADER_READ(route) {
     serialization::reader reader(is);
     auto str = reader.read_until(serialization::is_semicolon);
-    const auto match = parse(str, R"(^<(.+)>$)");
+    const auto match = serialization::parse(str, R"(^<(.+)>$)");
     h.uri = match[1].str();
 }
 
@@ -268,7 +258,7 @@ DEFINE_SIP_HEADER_WRITE(route) {
 DEFINE_SIP_HEADER_READ(record_route) {
     serialization::reader reader(is);
     auto str = reader.read_until(serialization::is_new_line);
-    const auto match = parse(str, R"(^<(.+)(?:;[\w\d./=]+)?>)");
+    const auto match = serialization::parse(str, R"(^<(.+)(?:;[\w\d./=]+)?>)");
     h.uri = match[1].str();
 }
 

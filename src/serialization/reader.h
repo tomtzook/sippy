@@ -3,6 +3,8 @@
 #include <istream>
 #include <cstdint>
 #include <exception>
+#include <optional>
+#include <regex>
 
 #include "matchers.h"
 
@@ -80,5 +82,8 @@ public:
 private:
     std::istream& m_is;
 };
+
+std::smatch parse(const std::string& data, std::string_view pattern);
+std::optional<std::smatch> try_parse(const std::string& data, std::string_view pattern);
 
 }

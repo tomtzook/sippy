@@ -15,3 +15,11 @@ DEFINE_SIP_BODY_READ(test) {
 DEFINE_SIP_BODY_WRITE(test) {
     os << b.v;
 }
+
+DEFINE_SIP_BODY_READ(sdp) {
+    b.description = sippy::sdp::parse(is);
+}
+
+DEFINE_SIP_BODY_WRITE(sdp) {
+    sippy::sdp::write(os, b.description);
+}

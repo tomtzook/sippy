@@ -44,20 +44,30 @@ add_library(sippy STATIC
         src/util/hex.h
         src/util/hex.cpp
         include/sip/transport.h
-        client/client.h
         include/sip/account.h
         src/sip/account.cpp
         src/sip/transport.cpp
         include/sip/session.h
-        src/sip/session.cpp)
+        src/sip/session.cpp
+        include/sdp/message.h
+        include/sdp/types.h
+        include/sdp/fields.h
+        src/sdp/fields_read_write.cpp
+        src/util/string_helper.h
+        src/util/string_helper.cpp
+        src/sdp/message.cpp
+        src/sdp/writer.h
+        src/sdp/writer.cpp
+        src/sdp/reader.h
+        src/sdp/reader.cpp
+        src/sdp/types.cpp)
 target_link_libraries(sippy PUBLIC looper PRIVATE OpenSSL::SSL OpenSSL::Crypto)
 target_include_directories(sippy
         PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        #PRIVATE
-        ${CMAKE_CURRENT_SOURCE_DIR}/src)
+        ${CMAKE_CURRENT_SOURCE_DIR}/src) #PRIVATE
 
-add_executable(test test.cpp)
-target_link_libraries(test sippy)
-add_executable(test2 client_test.cpp)
-target_link_libraries(test2 sippy looper)
+add_executable(client1 client1.cpp client.cpp)
+target_link_libraries(client1 sippy looper)
+add_executable(client2 client2.cpp client.cpp)
+target_link_libraries(client2 sippy looper)

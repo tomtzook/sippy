@@ -3,9 +3,12 @@
 #include <iostream>
 #include <memory>
 
+#include <sdp/message.h>
+
 namespace sippy::sip::bodies {
 
 struct _body {};
+using body = _body;
 
 namespace meta {
 
@@ -128,4 +131,8 @@ void register_body() {
 
 DECLARE_SIP_BODY(test, "application/test") {
     std::string v;
+};
+
+DECLARE_SIP_BODY(sdp, "application/sdp") {
+    sippy::sdp::session_description description;
 };

@@ -41,6 +41,10 @@ static constexpr bool is_semicolon(const char c) {
     return c == ';';
 }
 
+static constexpr bool is_slash(const char ch) {
+    return ch == '/';
+}
+
 static constexpr bool is_new_line(const char ch) {
     return ch == '\r' || ch == '\n';
 }
@@ -63,6 +67,14 @@ static constexpr bool is_whitespace_or_tab(const char c) {
 
 static constexpr bool is_alphanumeric(const char c) {
     return is_letter(c) || is_number(c);
+}
+
+static constexpr bool is_slash_or_new_line(const char c) {
+    return is_new_line(c) || c == '/';
+}
+
+static constexpr bool is_letter_or_slash(const char c) {
+    return is_letter(c) || c == '/';
 }
 
 }

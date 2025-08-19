@@ -108,5 +108,23 @@ std::string reader::read_until(const matcher matcher) {
     return std::move(result);
 }
 
+std::smatch parse(const std::string& data, const std::string_view pattern) {
+    auto match_opt = try_parse(data, pattern);
+    if (match_opt.has_value()) {
+        return match_opt.value();
+    } else {
+        throw std::invalid_argument("header data not matching pattern");
+    }
+}
+
+std::optional<std::smatch> try_parse(const std::string& data, const std::string_view pattern) {
+    std::regex regex(pattern.data());
+    std::smatch matches;
+    if (std::regex_match(data, matches, regex)) {
+        return matches;
+    }
+
+    return std::nullopt;
+}
 
 }

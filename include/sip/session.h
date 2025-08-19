@@ -76,7 +76,8 @@ public:
         std::string_view to_uri,
         std::string_view call_id,
         response_callback&& callback,
-        header_container&& additional_headers);
+        header_container&& additional_headers,
+        bodies::sdp&& body);
     void request_invite(
         std::string_view from_uri,
         std::string_view to_uri,
