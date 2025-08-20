@@ -1,6 +1,8 @@
 
 #include "writer.h"
 
+#include <cstring>
+
 namespace sippy::sdp {
 
 writer::writer(std::ostream& os)
@@ -29,15 +31,33 @@ void writer::write(const description_message& message) {
         }
     }
 
-    write_field_vec(message.attributes);
+    for (const auto& attr : message.attributes) {
+        write_attribute(attr);
+    }
 
     for (const auto& media_desc : message.media_descriptions) {
         write_field(media_desc.media);
         write_field_opt(media_desc.information);
         write_field_vec(media_desc.connections);
         write_field_vec(media_desc.bandwidths);
-        write_field_vec(media_desc.attributes);
+
+        for (const auto& attr : media_desc.attributes) {
+            write_attribute(attr);
+        }
     }
+}
+
+void writer::write_attribute(const attributes::storage::_base_attribute_holder& attr) {
+    m_os << fields::field_name_attribute << '=';
+
+    const auto name = attr.name();
+    if (strlen(name) > 0) {
+        m_os << name;
+        m_os << ':';
+    }
+
+    attr.operator<<(m_os);
+    m_os << "\r\n";
 }
 
 }

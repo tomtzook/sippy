@@ -1,16 +1,17 @@
 #pragma once
 
 #include <type_traits>
-#include <cstdint>
-#include <iostream>
 #include <optional>
 #include <vector>
+#include <cstdint>
 
 #include <sdp/types.h>
 
 namespace sippy::sdp::fields {
 
 struct _field {};
+
+static constexpr char field_name_attribute = 'a';
 
 enum flags : uint32_t {
     flag_none = 0,
@@ -19,9 +20,8 @@ enum flags : uint32_t {
 };
 
 struct timezone_adjustment {
-    uint64_t adjustment_time;
-    uint64_t offset;
-    bool offset_back;
+    uint64_t adjustment_time; // seconds
+    int64_t offset; // seconds
 };
 
 namespace meta {
@@ -146,14 +146,14 @@ DECLARE_SDP_FIELD(bandwidth_information, 'b') {
 };
 
 DECLARE_SDP_FIELD(time_active, 't') {
-    uint64_t start_time;
-    uint64_t stop_time;
+    uint64_t start_time; // seconds
+    uint64_t stop_time; // seconds
 };
 
 DECLARE_SDP_FIELD(repeat_times, 'r') {
-    uint64_t repeat_interval;
-    uint64_t active_duration;
-    std::vector<uint64_t> offsets;
+    uint64_t repeat_interval; // seconds
+    uint64_t active_duration; // seconds
+    std::vector<uint64_t> offsets; // seconds
 };
 
 DECLARE_SDP_FIELD(timezone, 'z') {
@@ -165,10 +165,5 @@ DECLARE_SDP_FIELD(media_description, 'm') {
     uint16_t port;
     uint64_t number_of_ports;
     transport_protocol protocol;
-    std::vector<std::string> formats;
-};
-
-DECLARE_SDP_FIELD(attribute, 'a') {
-    std::optional<std::string> name;
-    std::string value; // todo: typed/structed values
+    std::vector<uint16_t> formats;
 };

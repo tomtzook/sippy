@@ -2,12 +2,11 @@
 
 #include <string>
 #include <optional>
-#include <cstdint>
 #include <vector>
 #include <span>
 
-#include <sdp/types.h>
 #include <sdp/fields.h>
+#include <sdp/attributes.h>
 
 namespace sippy::sdp {
 
@@ -26,7 +25,7 @@ struct message_media_description {
     std::optional<fields::session_information> information;
     std::vector<fields::connection_information> connections;
     std::vector<fields::bandwidth_information> bandwidths;
-    std::vector<fields::attribute> attributes;
+    attributes::attribute_container attributes;
 };
 
 struct description_message {
@@ -40,7 +39,7 @@ struct description_message {
     std::optional<fields::connection_information> connection_information;
     std::vector<fields::bandwidth_information> bandwidths;
     std::vector<media_time_description> time_descriptions; // at least one required
-    std::vector<fields::attribute> attributes;
+    attributes::attribute_container attributes;
     std::vector<message_media_description> media_descriptions;
 
     // [ ] = optional one

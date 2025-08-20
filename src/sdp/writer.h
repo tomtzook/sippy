@@ -11,6 +11,8 @@ public:
     void write(const description_message& message);
 
 private:
+    void write_attribute(const attributes::storage::_base_attribute_holder& attr);
+
     template<typename T>
     void write_field(const T& field) {
         m_os << fields::meta::_field_detail<T>::name();

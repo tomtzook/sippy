@@ -137,9 +137,6 @@ DECLARE_SIP_BODY(test, "application/test") {
 DECLARE_SIP_BODY(sdp, "application/sdp") {
     sdp() = default;
 
-    explicit sdp(sippy::sdp::description_message&& description)
-        : description(description)
-    {}
     explicit sdp(sippy::sdp::session_description&& description)
         : description(description.to_message())
     {}

@@ -12,7 +12,7 @@ public:
     description_message read();
 
 private:
-    template<typename T>
+    template<fields::meta::_field_type T>
     bool peek() {
         const auto expected_name = fields::meta::_field_detail<T>::name();
         return m_reader.peek(expected_name);
@@ -62,6 +62,10 @@ private:
     void read_description(time_repeat_description& description);
     void read_description(media_time_description& description);
     void read_description(message_media_description& description);
+
+    bool peek_attribute();
+    attributes::storage::_attribute_holder_ptr read_attribute();
+    void read_attributes(attributes::attribute_container& attributes);
 
     std::istream& m_is;
     serialization::reader m_reader;

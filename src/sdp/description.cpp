@@ -47,77 +47,15 @@ static connection_information connection_from_field(const fields::connection_inf
     return info;
 }
 
-time_description::repeat_builder::repeat_builder(time_description& parent, const uint64_t interval, const uint64_t active_duration)
-    : m_parent(parent)
-    , m_repeat() {
-    m_repeat.interval = interval;
-    m_repeat.active_duration = active_duration;
+void media_information::set_information(const std::string_view info) {
+    m_information = info;
 }
 
-time_description::repeat_builder::~repeat_builder() {
-    m_parent.m_repeats.push_back(std::move(m_repeat));
+void media_information::add_connection(connection_information&& information) {
+    m_connections.push_back(std::move(information));
 }
 
-time_description::repeat_builder& time_description::repeat_builder::add_offset(uint64_t offset) {
-    m_repeat.offsets.push_back(offset);
-    return *this;
-}
-
-time_description::repeat_builder& time_description::repeat_builder::tz_adjust(const uint64_t adjustment_time, const uint64_t offset, const bool forward) {
-    timezone tz{};
-    tz.adjustment_time = adjustment_time;
-    tz.offset = offset;
-    tz.offset_back = !forward;
-    m_repeat.timezones.push_back(std::move(tz));
-
-    return *this;
-}
-
-time_description::time_description(const std::chrono::milliseconds start_time, const std::chrono::milliseconds stop_time)
-    : m_start_time(start_time)
-    , m_stop_time(stop_time)
-    , m_repeats()
-{}
-
-time_description::repeat_builder time_description::add_repeat(const uint64_t interval, const uint64_t active_duration) {
-    return repeat_builder(*this, interval, active_duration);
-}
-
-media_description::media_description(const media_type type)
-    : m_type(type)
-    , m_port()
-    , m_number_of_ports()
-    , m_protocol()
-    , m_formats()
-    , m_media()
-{}
-
-void media_description::set_protocol(const transport_protocol protocol, const uint16_t port, const uint16_t port_count) {
-    m_protocol = protocol;
-    m_port = port;
-    m_number_of_ports = port_count;
-}
-
-void media_description::add_format(const std::string_view format) {
-    m_formats.emplace_back(format);
-}
-
-void media_description::add_format(const uint16_t format) {
-    std::stringstream ss;
-    ss << format;
-
-    m_formats.emplace_back(ss.str());
-}
-
-void media_description::set_information(const std::string_view info) {
-    m_media.information = info;
-}
-
-void media_description::add_connection(connection_information&& information) {
-    m_media.connections.push_back(std::move(information));
-}
-
-void media_description::add_connection_ipv4(const std::string_view base_address, const uint16_t count, const uint16_t ttl) {
+void media_information::add_connection_ipv4(const std::string_view base_address, const uint16_t count, const uint16_t ttl) {
     connection_information info{};
     info.address.network_type = network_type::in;
     info.address.address_type = address_type::ipv4;
@@ -134,8 +72,88 @@ void media_description::add_connection_ipv4(const std::string_view base_address,
     add_connection(std::move(info));
 }
 
-void media_description::set_bandwidth(std::string_view type, std::string_view bandwidth) {
-    m_media.bandwidths.emplace(type, bandwidth);
+void media_information::set_bandwidth(std::string_view type, std::string_view bandwidth) {
+    m_bandwidths.emplace(type, bandwidth);
+}
+
+time_description::repeat_builder::repeat_builder(time_description& parent, const std::chrono::seconds interval, const std::chrono::seconds active_duration)
+    : m_parent(parent)
+    , m_repeat() {
+    m_repeat.interval = interval;
+    m_repeat.active_duration = active_duration;
+}
+
+time_description::repeat_builder::~repeat_builder() {
+    m_parent.m_repeats.push_back(std::move(m_repeat));
+}
+
+time_description::repeat_builder& time_description::repeat_builder::add_offset(const std::chrono::seconds offset) {
+    m_repeat.offsets.push_back(offset);
+    return *this;
+}
+
+time_description::repeat_builder& time_description::repeat_builder::tz_adjust(const std::chrono::seconds adjustment_time, const std::chrono::seconds offset) {
+    timezone tz{};
+    tz.adjustment_time = adjustment_time;
+    tz.offset = offset;
+    m_repeat.timezones.push_back(std::move(tz));
+
+    return *this;
+}
+
+time_description::time_description(const std::chrono::seconds start_time, const std::chrono::seconds stop_time)
+    : m_start_time(start_time)
+    , m_stop_time(stop_time)
+    , m_repeats()
+{}
+
+time_description::repeat_builder time_description::add_repeat(const std::chrono::seconds interval, const std::chrono::seconds active_duration) {
+    return repeat_builder(*this, interval, active_duration);
+}
+
+media_description::media_description(const media_type type)
+    : m_type(type)
+    , m_port()
+    , m_number_of_ports()
+    , m_protocol()
+    , m_formats()
+{}
+
+void media_description::set_protocol(const transport_protocol protocol, const uint16_t port, const uint16_t port_count) {
+    m_protocol = protocol;
+    m_port = port;
+    m_number_of_ports = port_count;
+}
+
+void media_description::add_format(const uint16_t format) {
+    auto it = m_formats.find(format);
+    if (it != m_formats.end()) {
+        throw std::invalid_argument("format already exists");
+    }
+
+    media_description::format fmt_strct{};
+    fmt_strct.id = format;
+    m_formats.emplace(format, fmt_strct);
+}
+
+void media_description::add_rtpmap(const uint16_t format, const std::string_view name, const uint16_t clock_rate, const uint8_t channels) {
+    auto it = m_formats.find(format);
+    if (it == m_formats.end()) {
+        throw std::invalid_argument("no such format");
+    }
+
+    it->second.name = name;
+    it->second.clock_rate = clock_rate;
+    it->second.channels = channels;
+}
+
+void media_description::add_fmtp(const uint16_t format, const std::string_view name, const std::string_view value) {
+    auto it = m_formats.find(format);
+    if (it == m_formats.end()) {
+        throw std::invalid_argument("no such format");
+    }
+
+    it->second.params.emplace(name, value);
 }
 
 session_description::session_description()
@@ -147,7 +165,6 @@ session_description::session_description()
     , m_uri()
     , m_emails()
     , m_phone_numbers()
-    , m_session_level_media()
     , m_medias()
 {}
 
@@ -180,39 +197,6 @@ void session_description::add_phone_number(const std::string_view phone_number) 
     m_phone_numbers.emplace_back(phone_number);
 }
 
-void session_description::set_information(std::string_view info) {
-    m_session_level_media.information = info;
-}
-
-void session_description::set_connection(connection_information&& information) {
-    if (m_session_level_media.information->empty()) {
-        m_session_level_media.connections.emplace_back(std::move(information));
-    } else {
-        *m_session_level_media.connections.begin() = std::move(information);
-    }
-}
-
-void session_description::set_connection_ipv4(const std::string_view base_address, const uint16_t count, const uint16_t ttl) {
-    connection_information info{};
-    info.address.network_type = network_type::in;
-    info.address.address_type = address_type::ipv4;
-    info.address.address_value = base_address;
-
-    if (info.count > 1) {
-        info.count = count;
-    }
-
-    if (ttl != 0) {
-        info.ttl = ttl;
-    }
-
-    set_connection(std::move(info));
-}
-
-void session_description::set_bandwidth(const std::string_view type, const std::string_view bandwidth) {
-    m_session_level_media.bandwidths.emplace(type, bandwidth);
-}
-
 void session_description::add_time(time_description&& time) {
     m_times.emplace_back(std::move(time));
 }
@@ -232,8 +216,8 @@ description_message session_description::to_message() const {
     msg.origin.unicast_address = m_owner_address.address_value;
     msg.name.name = m_name;
 
-    if (m_session_level_media.information.has_value()) {
-        msg.information = fields::session_information{.information = m_session_level_media.information.value()};
+    if (m_information.has_value()) {
+        msg.information = fields::session_information{.information = m_information.value()};
     }
     if (m_uri.has_value()) {
         msg.uri = fields::uri{.uri_str = m_uri.value()};
@@ -251,12 +235,12 @@ description_message session_description::to_message() const {
         msg.phone_numbers.push_back(std::move(field));
     }
 
-    if (!m_session_level_media.connections.empty()) {
-        const auto& con = m_session_level_media.connections[0];
+    if (!m_connections.empty()) {
+        const auto& con = m_connections[0];
         msg.connection_information = connection_to_field(con);
     }
 
-    for (const auto& [type, bandwidth] : m_session_level_media.bandwidths) {
+    for (const auto& [type, bandwidth] : m_bandwidths) {
         fields::bandwidth_information field{};
         field.bw_type = type;
         field.bandwidth = bandwidth;
@@ -270,16 +254,18 @@ description_message session_description::to_message() const {
 
         for (const auto& rep_desc : desc.m_repeats) {
             time_repeat_description rep_field{};
-            rep_field.repeat.repeat_interval = rep_desc.interval;
-            rep_field.repeat.active_duration = rep_desc.active_duration;
-            rep_field.repeat.offsets = rep_desc.offsets;
+            rep_field.repeat.repeat_interval = rep_desc.interval.count();
+            rep_field.repeat.active_duration = rep_desc.active_duration.count();
+
+            for (const auto& offset : rep_desc.offsets) {
+                rep_field.repeat.offsets.push_back(offset.count());
+            }
 
             fields::timezone tz_field{};
             for (const auto& tz_desc : rep_desc.timezones) {
                 fields::timezone_adjustment adjust{};
-                adjust.adjustment_time = tz_desc.adjustment_time;
-                adjust.offset = tz_desc.offset;
-                adjust.offset_back = tz_desc.offset_back;
+                adjust.adjustment_time = tz_desc.adjustment_time.count();
+                adjust.offset = tz_desc.offset.count();
                 tz_field.adjustments.emplace_back(std::move(adjust));
             }
 
@@ -302,17 +288,38 @@ description_message session_description::to_message() const {
         field.media.protocol = desc.m_protocol;
         field.media.port = desc.m_port;
         field.media.number_of_ports = desc.m_number_of_ports;
-        field.media.formats = desc.m_formats;
 
-        if (desc.m_media.information.has_value()) {
-            field.information = fields::session_information{.information = desc.m_media.information.value()};
+        for (const auto& [id, format] : desc.m_formats) {
+            field.media.formats.push_back(id);
+
+            if (format.name.has_value() && format.clock_rate.has_value()) {
+                attributes::rtpmap attr{};
+                attr.payload_type = id;
+                attr.encoding_name = format.name.value();
+                attr.clock_rate = format.clock_rate.value();
+                attr.channels = format.channels.value_or(0);
+
+                field.attributes.add(std::move(attr));
+            }
+
+            if (!format.params.empty()) {
+                attributes::fmtp attr{};
+                for (const auto& [name, value] : format.params) {
+                    attr.params.emplace(name, value);
+                }
+                field.attributes.add(std::move(attr));
+            }
         }
 
-        for (const auto& con : desc.m_media.connections) {
+        if (desc.m_information.has_value()) {
+            field.information = fields::session_information{.information = desc.m_information.value()};
+        }
+
+        for (const auto& con : desc.m_connections) {
             field.connections.push_back(connection_to_field(con));
         }
 
-        for (const auto& [type, bandwidth] : desc.m_media.bandwidths) {
+        for (const auto& [type, bandwidth] : desc.m_bandwidths) {
             fields::bandwidth_information bw_field{};
             bw_field.bw_type = type;
             bw_field.bandwidth = bandwidth;
@@ -337,7 +344,7 @@ void session_description::from_message(const description_message& msg) {
     m_name = msg.name.name;
 
     if (msg.information.has_value()) {
-        m_session_level_media.information = msg.information.value().information;
+        m_information = msg.information.value().information;
     }
     if (msg.uri.has_value()) {
         m_uri = msg.uri.value().uri_str;
@@ -353,7 +360,7 @@ void session_description::from_message(const description_message& msg) {
 
     if (msg.connection_information.has_value()) {
         const auto& con_field = msg.connection_information.value();
-        m_session_level_media.connections.emplace_back(connection_from_field(con_field));
+        add_connection(connection_from_field(con_field));
     }
 
     for (const auto& bw_field : msg.bandwidths) {
@@ -362,29 +369,29 @@ void session_description::from_message(const description_message& msg) {
 
     for (const auto& time_field : msg.time_descriptions) {
         time_description time_desc(
-            std::chrono::milliseconds(time_field.times.start_time),
-            std::chrono::milliseconds(time_field.times.stop_time));
+            std::chrono::seconds(time_field.times.start_time),
+            std::chrono::seconds(time_field.times.stop_time));
 
         for (const auto& rep_field : time_field.repeat) {
             time_description::repeat rep_desc{};
-            rep_desc.interval = rep_field.repeat.repeat_interval;
-            rep_desc.active_duration = rep_field.repeat.active_duration;
-            rep_desc.offsets = rep_field.repeat.offsets;
+            rep_desc.interval = std::chrono::seconds(rep_field.repeat.repeat_interval);
+            rep_desc.active_duration = std::chrono::seconds(rep_field.repeat.active_duration);
+
+            for (const auto& offset : rep_field.repeat.offsets) {
+                rep_desc.offsets.emplace_back(offset);
+            }
 
             if (rep_field.timezone.has_value()) {
                 for (const auto& tz_field : rep_field.timezone.value().adjustments) {
                     time_description::timezone tz{};
-                    tz.adjustment_time = tz_field.adjustment_time;
-                    tz.offset = tz_field.offset;
-                    tz.offset_back = tz_field.offset_back;
+                    tz.adjustment_time = std::chrono::seconds(tz_field.adjustment_time);
+                    tz.offset = std::chrono::seconds(tz_field.offset);
                     rep_desc.timezones.emplace_back(std::move(tz));
                 }
             }
 
             time_desc.m_repeats.push_back(std::move(rep_desc));
         }
-
-        add_time(std::move(time_desc));
     }
 
     // todo: attributes
@@ -409,7 +416,16 @@ void session_description::from_message(const description_message& msg) {
             desc.set_bandwidth(bw_field.bw_type, bw_field.bandwidth);
         }
 
-        // todo: attributes
+        for (auto it = media.attributes.begin_attr<attributes::rtpmap>();
+            it != media.attributes.end_attr<attributes::rtpmap>(); ++it) {
+            desc.add_rtpmap(it->payload_type, it->encoding_name, it->clock_rate, it->channels);
+        }
+        for (auto it = media.attributes.begin_attr<attributes::fmtp>();
+            it != media.attributes.end_attr<attributes::fmtp>(); ++it) {
+            for (const auto& [name, value] : it->params) {
+                desc.add_fmtp(it->payload_type, name, value);
+            }
+        }
 
         add_media(std::move(desc));
     }

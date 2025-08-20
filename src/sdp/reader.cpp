@@ -1,4 +1,5 @@
 
+#include "types_storage.h"
 #include "reader.h"
 
 
@@ -27,7 +28,7 @@ description_message reader::read() {
         description.time_descriptions.push_back(std::move(time_description));
     } while (peek<fields::time_active>());
 
-    read_vector(description.attributes);
+    read_attributes(description.attributes);
 
     while (peek<fields::media_description>()) {
         message_media_description media_description{};
@@ -60,7 +61,46 @@ void reader::read_description(message_media_description& description) {
     read_optional(description.information);
     read_vector(description.connections);
     read_vector(description.bandwidths);
-    read_vector(description.attributes);
+    read_attributes(description.attributes);
+}
+
+bool reader::peek_attribute() {
+    return m_reader.peek(fields::field_name_attribute);
+}
+
+attributes::storage::_attribute_holder_ptr reader::read_attribute() {
+    m_reader.eat('=');
+
+    attributes::storage::_attribute_holder_ptr ptr;
+
+    auto value = m_reader.read_until(serialization::is_colon_or_newline);
+    if (m_reader.eat_one_if(serialization::is_colon)) {
+        auto name = std::move(value);
+        value = m_reader.read_until(serialization::is_new_line);
+
+        const auto def = attributes::storage::get_attribute(name);
+        if (def) {
+            ptr = def.value()->create();
+            std::stringstream ss(value);
+            ptr->operator>>(ss);
+        }
+    } else {
+        // todo: HANDLE
+    }
+
+    m_reader.eat('\r');
+    m_reader.eat('\n');
+
+    return ptr;
+}
+
+void reader::read_attributes(attributes::attribute_container& attributes) {
+    while (peek_attribute()) {
+        auto ptr = read_attribute();
+        if (ptr) {
+            attributes.add(std::move(ptr));
+        }
+    }
 }
 
 }

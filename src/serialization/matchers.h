@@ -45,6 +45,10 @@ static constexpr bool is_slash(const char ch) {
     return ch == '/';
 }
 
+static constexpr bool is_equal(const char ch) {
+    return ch == '=';
+}
+
 static constexpr bool is_new_line(const char ch) {
     return ch == '\r' || ch == '\n';
 }
@@ -75,6 +79,10 @@ static constexpr bool is_slash_or_new_line(const char c) {
 
 static constexpr bool is_letter_or_slash(const char c) {
     return is_letter(c) || c == '/';
+}
+
+static constexpr bool is_colon_or_newline(const char c) {
+    return is_colon(c) || is_new_line(c);
 }
 
 }

@@ -23,6 +23,34 @@ static bool is_valid_string(const std::string_view str, const bool allow_whitesp
     return true;
 }
 
+static int64_t read_typed_time(std::istream& is) {
+    int64_t time;
+    is >> time;
+
+    const auto peek = is.peek();
+    if (peek == 'd' || peek == 'h' || peek == 'm' || peek == 's') {
+        char ch;
+        if (is.get(ch)) {
+            switch (ch) {
+                case 'd':
+                    time = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::days(time)).count();
+                    break;
+                case 'h':
+                    time = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::hours(time)).count();
+                    break;
+                case 'm':
+                    time = std::chrono::duration_cast<std::chrono::seconds>(std::chrono::minutes(time)).count();
+                    break;
+                case 's':
+                default:
+                    break;
+            }
+        }
+    }
+
+    return time;
+}
+
 
 DEFINE_SDP_FIELD_VALIDATOR(version) {
     return f.ver == sdp::version::version_0;
@@ -326,16 +354,13 @@ DEFINE_SDP_FIELD_VALIDATOR(repeat_times) {
 }
 
 DEFINE_SDP_FIELD_READ(repeat_times) {
-    // todo: support time units
     serialization::reader reader(is);
     is >> f.repeat_interval;
     reader.eat(' ');
-    is >> f.active_duration;
+    f.active_duration = read_typed_time(is);
 
     while (reader.eat_one_if(serialization::is_whitespace)) {
-        uint64_t offset;
-        is >> offset;
-        f.offsets.push_back(offset);
+        f.offsets.push_back(read_typed_time(is));
     }
 }
 
@@ -363,14 +388,17 @@ static sippy::sdp::fields::timezone_adjustment read_timezone_adjustment(std::ist
     sdp::fields::timezone_adjustment adjustment{};
     is >> adjustment.adjustment_time;
     reader.eat(' ');
-    adjustment.offset_back = reader.eat_one_if(serialization::is_dash);
-    is >> adjustment.offset;
+
+    const auto negative = reader.eat_one_if(serialization::is_dash);
+    adjustment.offset = read_typed_time(is);
+    if (negative) {
+        adjustment.offset = -adjustment.offset;
+    }
 
     return adjustment;
 }
 
 DEFINE_SDP_FIELD_READ(timezone) {
-    // todo: support time units
     serialization::reader reader(is);
 
     // must have one
@@ -383,10 +411,6 @@ DEFINE_SDP_FIELD_WRITE(timezone) {
     for (auto it = f.adjustments.cbegin(); it != f.adjustments.cend();) {
         os << it->adjustment_time;
         os << ' ';
-
-        if (it->offset_back) {
-            os << '-';
-        }
         os << it->offset;
 
         ++it;
@@ -414,7 +438,8 @@ DEFINE_SDP_FIELD_READ(media_description) {
     is >> f.protocol;
 
     while (reader.eat_one_if(serialization::is_whitespace)) {
-        auto format = reader.read_while(serialization::is_alphanumeric);
+        uint16_t format;
+        is >> format;
         f.formats.push_back(format);
     }
 }
@@ -438,27 +463,4 @@ DEFINE_SDP_FIELD_WRITE(media_description) {
             os << ' ';
         }
     }
-}
-
-DEFINE_SDP_FIELD_VALIDATOR(attribute) {
-    return true;
-}
-
-DEFINE_SDP_FIELD_READ(attribute) {
-    serialization::reader reader(is);
-    auto value = reader.read_until(serialization::is_colon);
-    if (reader.eat_one_if(serialization::is_colon)) {
-        f.name.emplace(std::move(value));
-
-        value = reader.read_until(serialization::is_new_line);
-        f.value = value;
-    }
-}
-
-DEFINE_SDP_FIELD_WRITE(attribute) {
-    if (f.name.has_value()) {
-        os << f.name.value();
-        os << ':';
-    }
-    os << f.value;
 }

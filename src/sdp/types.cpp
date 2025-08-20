@@ -43,6 +43,13 @@ public:
     }
 };
 
+class unknown_media_direction final : public std::exception {
+public:
+    [[nodiscard]] const char *what() const noexcept override {
+        return "Unknown media direction";
+    }
+};
+
 std::map<std::string, media_type, std::less<>> m_str_to_media_type = {
     {"audio", media_type::audio},
     {"video", media_type::video},
@@ -65,6 +72,13 @@ std::map<std::string, network_type, std::less<>> m_str_to_net_type = {
 std::map<std::string, address_type, std::less<>> m_str_to_addr_type = {
     {"IP4", address_type::ipv4},
     {"IP6", address_type::ipv6},
+};
+
+std::map<std::string, media_direction, std::less<>> m_str_to_media_direction = {
+    {"recvonly", media_direction::recvonly},
+    {"sendrecv", media_direction::sendrecv},
+    {"sendonly", media_direction::sendonly},
+    {"inactive", media_direction::inactive},
 };
 
 std::istream& operator>>(std::istream& is, version& version) {
@@ -215,6 +229,41 @@ std::ostream& operator<<(std::ostream& os, const address_type address_type) {
             break;
         default:
             throw unknown_address_type();
+    }
+
+    return os;
+}
+
+std::istream& operator>>(std::istream& is, media_direction& media_direction) {
+    serialization::reader reader(is);
+    const auto line = reader.read_while(serialization::is_letter);
+
+    const auto it = m_str_to_media_direction.find(line);
+    if (it != m_str_to_media_direction.end()) {
+        media_direction = it->second;
+    } else {
+        throw unknown_media_direction();
+    }
+
+    return is;
+}
+
+std::ostream& operator<<(std::ostream& os, const media_direction media_direction) {
+    switch (media_direction) {
+        case media_direction::recvonly:
+            os << "recvonly";
+            break;
+        case media_direction::sendrecv:
+            os << "sendrecv";
+            break;
+        case media_direction::sendonly:
+            os << "sendonly";
+            break;
+        case media_direction::inactive:
+            os << "inactive";
+            break;
+        default:
+            throw unknown_media_direction();
     }
 
     return os;

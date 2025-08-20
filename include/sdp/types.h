@@ -32,6 +32,13 @@ enum class address_type {
     ipv6
 };
 
+enum class media_direction {
+    recvonly,
+    sendrecv,
+    sendonly,
+    inactive
+};
+
 std::istream& operator>>(std::istream& is, version& version);
 std::ostream& operator<<(std::ostream& os, version version);
 std::istream& operator>>(std::istream& is, media_type& media_type);
@@ -42,5 +49,7 @@ std::istream& operator>>(std::istream& is, network_type& network_type);
 std::ostream& operator<<(std::ostream& os, network_type network_type);
 std::istream& operator>>(std::istream& is, address_type& address_type);
 std::ostream& operator<<(std::ostream& os, address_type address_type);
+std::istream& operator>>(std::istream& is, media_direction& media_direction);
+std::ostream& operator<<(std::ostream& os, media_direction media_direction);
 
 }

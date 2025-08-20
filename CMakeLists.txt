@@ -62,7 +62,11 @@ add_library(sippy STATIC
         src/sdp/reader.cpp
         src/sdp/types.cpp
         include/sdp/description.h
-        src/sdp/description.cpp)
+        src/sdp/description.cpp
+        include/sdp/attributes.h
+        src/sdp/attribute_read_write.cpp
+        src/sdp/types_storage.cpp
+        src/sdp/attr_container.cpp)
 target_link_libraries(sippy PUBLIC looper PRIVATE OpenSSL::SSL OpenSSL::Crypto)
 target_include_directories(sippy
         PUBLIC

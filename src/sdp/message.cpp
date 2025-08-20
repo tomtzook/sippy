@@ -51,8 +51,14 @@ void validate_message(const description_message& message) {
     if (!is_valid_vec(message.bandwidths)) {
         throw std::invalid_argument("Invalid session level bandwiths field");
     }
-    if (!is_valid_vec(message.attributes)) {
-        throw std::invalid_argument("Invalid session level attributes field");
+
+    for (const auto& attr : message.attributes) {
+        if ((attr.flags() & attributes::flag_session_level) == 0) {
+            throw std::invalid_argument("Invalid attribute in session level");
+        }
+        if (message.attributes.count(attr.name()) > 1 && (attr.flags() & attributes::flag_allow_multiple) == 0) {
+            throw std::invalid_argument("Attribute has multiple entries but only one allowed");
+        }
     }
 
     for (const auto& time_desc : message.time_descriptions) {
@@ -83,8 +89,14 @@ void validate_message(const description_message& message) {
         if (!is_valid_vec(media_desc.bandwidths)) {
             throw std::invalid_argument("Invalid media level bandwidths field");
         }
-        if (!is_valid_vec(media_desc.attributes)) {
-            throw std::invalid_argument("Invalid media level attributes field");
+
+        for (const auto& attr : media_desc.attributes) {
+            if ((attr.flags() & attributes::flag_media_level) == 0) {
+                throw std::invalid_argument("Invalid attribute in media level");
+            }
+            if (media_desc.attributes.count(attr.name()) > 1 && (attr.flags() & attributes::flag_allow_multiple) == 0) {
+                throw std::invalid_argument("Attribute has multiple entries but only one allowed");
+            }
         }
     }
 }
